@@ -3,479 +3,960 @@ import {
   View, Text, TouchableOpacity, TextInput, StyleSheet,
   ScrollView, KeyboardAvoidingView, Platform, SafeAreaView, Animated,
 } from 'react-native'
-import Slider from '@react-native-community/slider'
 import { router } from 'expo-router'
 import { useStore, OnboardingData } from '@/lib/store'
 import { C, F } from '@/lib/theme'
 
-// Step 0 = welcome (no data), Steps 1-6 = questions
-const QUESTION_STEPS = 6
-const TOTAL_STEPS = QUESTION_STEPS + 1 // include welcome
+// ── Types ─────────────────────────────────────────────────────────────────────
+type Answers = {
+  symptoms: string[]
+  habitDuration: string
+  frequency: string
+  triedBefore: string
+  triggers: string[]
+  dangerPlaces: string[]
+  dangerTime: string
+  costs: string[]
+  goals: string[]
+  primaryGoal: string
+  motivationType: string
+  name: string
+  yourWhy: string
+  selectedMorningTasks: string[]
+  selectedAnytimeTasks: string[]
+  selectedEveningTasks: string[]
+  languageStyle: 'secular' | 'religious'
+}
 
-function ProgressDots({ current }: { current: number }) {
-  // current is 0-indexed, dots only shown for question steps (1-6)
-  if (current === 0) return null
+const INIT: Answers = {
+  symptoms: [], habitDuration: '', frequency: '', triedBefore: '',
+  triggers: [], dangerPlaces: [], dangerTime: '', costs: [], goals: [],
+  primaryGoal: '', motivationType: '', name: '', yourWhy: '',
+  selectedMorningTasks: [], selectedAnytimeTasks: [], selectedEveningTasks: [],
+  languageStyle: 'secular',
+}
+
+// Steps 2–12 are the 11 data questions (show progress bar)
+const Q_START = 2
+const Q_END = 12
+const Q_COUNT = Q_END - Q_START + 1
+
+// ── Shared UI ─────────────────────────────────────────────────────────────────
+function ProgressBar({ step }: { step: number }) {
+  if (step < Q_START || step > Q_END) return null
+  const pct = ((step - Q_START + 1) / Q_COUNT) * 100
   return (
-    <View style={s.dotsRow}>
-      {Array.from({ length: QUESTION_STEPS }).map((_, i) => (
-        <View
-          key={i}
-          style={[
-            s.dot,
-            i < current - 1 ? s.dotDone : i === current - 1 ? s.dotActive : s.dotInactive,
-          ]}
-        />
-      ))}
+    <View style={s.progressTrack}>
+      <View style={[s.progressFill, { width: `${pct}%` as any }]} />
     </View>
   )
 }
 
-function OptionCard({
-  label, sublabel, emoji, selected, onPress,
-}: {
-  label: string; sublabel?: string; emoji?: string; selected: boolean; onPress: () => void
+function PillBtn({ label, onPress, disabled, outline }: { label: string; onPress: () => void; disabled?: boolean; outline?: boolean }) {
+  return (
+    <TouchableOpacity
+      onPress={disabled ? undefined : onPress}
+      activeOpacity={disabled ? 1 : 0.85}
+      style={[s.pill, outline && s.pillOutline, disabled && s.pillDisabled]}
+    >
+      <Text style={[s.pillText, outline && s.pillOutlineText, disabled && s.pillDisabledText]}>{label}</Text>
+    </TouchableOpacity>
+  )
+}
+
+// Single-choice option row
+function RadioRow({ label, sublabel, icon, selected, onPress }: {
+  label: string; sublabel?: string; icon?: string; selected: boolean; onPress: () => void
 }) {
   return (
-    <TouchableOpacity
-      onPress={onPress}
-      style={[s.optionCard, selected && s.optionCardSelected]}
-      activeOpacity={0.75}
-    >
-      <View style={{ flex: 1, alignItems: 'flex-end' }}>
-        <Text style={[s.optionLabel, selected && { color: C.orange }]}>{label}</Text>
-        {sublabel ? <Text style={s.optionSublabel}>{sublabel}</Text> : null}
+    <TouchableOpacity onPress={onPress} activeOpacity={0.75}
+      style={[s.optRow, selected && s.optRowSel]}>
+      <View style={[s.circle, selected && s.circleSel]}>
+        {selected && <View style={s.circleDot} />}
       </View>
-      {emoji ? <Text style={s.optionEmoji}>{emoji}</Text> : null}
-      {!emoji && (
-        <View style={[s.checkCircle, selected && s.checkCircleSelected]}>
-          {selected && <View style={s.checkInner} />}
-        </View>
-      )}
+      <View style={{ flex: 1 }}>
+        <Text style={[s.optLabel, selected && s.optLabelSel]}>{label}</Text>
+        {sublabel ? <Text style={s.optSub}>{sublabel}</Text> : null}
+      </View>
+      {icon ? <Text style={s.optIcon}>{icon}</Text> : null}
     </TouchableOpacity>
   )
 }
 
-function ContinueButton({ onPress, enabled, label = 'המשך' }: { onPress: () => void; enabled: boolean; label?: string }) {
+// Multi-choice option row (checkbox)
+function CheckRow({ label, sublabel, icon, selected, onPress }: {
+  label: string; sublabel?: string; icon?: string; selected: boolean; onPress: () => void
+}) {
   return (
-    <TouchableOpacity
-      onPress={enabled ? onPress : undefined}
-      style={[s.continueBtn, !enabled && s.continueBtnDisabled]}
-      activeOpacity={enabled ? 0.85 : 1}
-    >
-      <Text style={[s.continueBtnText, !enabled && { color: C.dim }]}>{label}</Text>
+    <TouchableOpacity onPress={onPress} activeOpacity={0.75}
+      style={[s.optRow, selected && s.optRowSel]}>
+      <View style={[s.checkbox, selected && s.checkboxSel]}>
+        {selected && <Text style={s.checkmark}>✓</Text>}
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={[s.optLabel, selected && s.optLabelSel]}>{label}</Text>
+        {sublabel ? <Text style={s.optSub}>{sublabel}</Text> : null}
+      </View>
+      {icon ? <Text style={s.optIcon}>{icon}</Text> : null}
     </TouchableOpacity>
   )
 }
 
-// ─── Welcome ───────────────────────────────────────────────────────────────────
-function WelcomeScreen({ onNext }: { onNext: () => void }) {
-  const scale = useRef(new Animated.Value(0.8)).current
-  const opacity = useRef(new Animated.Value(0)).current
-
+// ── Hook Screen (no input, just big text + button) ────────────────────────────
+function HookScreen({ title, subtitle, btn, onPress, green }: {
+  title: string; subtitle?: string; btn: string; onPress: () => void; green?: string
+}) {
+  const fade = useRef(new Animated.Value(0)).current
   useEffect(() => {
-    Animated.parallel([
-      Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 6 }),
-      Animated.timing(opacity, { toValue: 1, duration: 600, useNativeDriver: true }),
-    ]).start()
+    Animated.timing(fade, { toValue: 1, duration: 500, useNativeDriver: true }).start()
   }, [])
-
   return (
-    <Animated.View style={[{ flex: 1, opacity }, s.welcomeWrap]}>
-      <View style={s.welcomeTop}>
-        <Animated.Text style={[s.welcomeEmoji, { transform: [{ scale }] }]}>🛡️</Animated.Text>
-        <Text style={s.welcomeTitle}>שליטה</Text>
-        <Text style={s.welcomeTagline}>היה האיש שאתה יכול להיות</Text>
+    <Animated.View style={[s.hookWrap, { opacity: fade }]}>
+      <View style={s.hookCenter}>
+        <Text style={s.hookTitle}>{title}</Text>
+        {subtitle && !green && <Text style={s.hookSub}>{subtitle}</Text>}
+        {green && (
+          <Text style={s.hookGreen}>{green}</Text>
+        )}
+        {subtitle && green && <Text style={s.hookSub}>{subtitle}</Text>}
       </View>
-
-      <View style={s.welcomeCards}>
-        <View style={s.featureRow}>
-          <View style={s.featureCard}>
-            <Text style={s.featureEmoji}>🔥</Text>
-            <Text style={s.featureLabel}>מעקב רצף</Text>
-          </View>
-          <View style={s.featureCard}>
-            <Text style={s.featureEmoji}>📊</Text>
-            <Text style={s.featureLabel}>תובנות יומיות</Text>
-          </View>
-          <View style={s.featureCard}>
-            <Text style={s.featureEmoji}>⚡</Text>
-            <Text style={s.featureLabel}>כפתור מגן</Text>
-          </View>
-        </View>
-        <Text style={s.welcomeSubtext}>
-          אלפי גברים כבר בנו שליטה עצמית אמיתית.{'\n'}הגיע תורך.
-        </Text>
-      </View>
-
-      <ContinueButton onPress={onNext} enabled label="בואו נתחיל" />
-      <Text style={s.welcomeDisclaimer}>שאלון קצר • 2 דקות • בלי שיפוטיות</Text>
+      <PillBtn label={btn} onPress={onPress} />
     </Animated.View>
   )
 }
 
-// ─── Step 1: How long ──────────────────────────────────────────────────────────
-function Step1({ onNext }: { onNext: (v: string) => void }) {
+// ── Q: Single choice ──────────────────────────────────────────────────────────
+function SingleQ({ title, subtitle, opts, onNext }: {
+  title: string; subtitle?: string
+  opts: { label: string; sublabel?: string; icon?: string }[]
+  onNext: (v: string) => void
+}) {
   const [sel, setSel] = useState('')
-  const opts = [
-    { label: 'פחות מ-6 חודשים', emoji: '🌱' },
-    { label: 'חצי שנה עד שנה', emoji: '🌿' },
-    { label: '1-3 שנים', emoji: '🌲' },
-    { label: 'יותר מ-3 שנים', emoji: '🏔️' },
-  ]
   return (
-    <View style={s.stepWrap}>
-      <View style={s.stepHeader}>
-        <Text style={s.stepQ}>כמה זמן{'\n'}ההרגל הזה נמשך?</Text>
-        <Text style={s.stepHint}>כנות עם עצמך היא הצעד הראשון</Text>
-      </View>
-      <View style={s.optionsGap}>
+    <View style={s.qWrap}>
+      <Text style={s.qTitle}>{title}</Text>
+      {subtitle && <Text style={s.qSub}>{subtitle}</Text>}
+      <View style={s.optList}>
         {opts.map(o => (
-          <OptionCard
-            key={o.label}
-            label={o.label}
-            emoji={o.emoji}
-            selected={sel === o.label}
-            onPress={() => setSel(o.label)}
-          />
+          <RadioRow key={o.label} {...o} selected={sel === o.label} onPress={() => setSel(o.label)} />
         ))}
       </View>
-      <ContinueButton onPress={() => onNext(sel)} enabled={!!sel} />
+      <PillBtn label="המשך" onPress={() => onNext(sel)} disabled={!sel} />
     </View>
   )
 }
 
-// ─── Step 2: Frequency ─────────────────────────────────────────────────────────
-function Step2({ onNext }: { onNext: (v: string) => void }) {
-  const [sel, setSel] = useState('')
-  const opts = [
-    { label: 'כל יום', sublabel: 'קורה לי מדי יום', emoji: '😔' },
-    { label: 'כמה פעמים בשבוע', sublabel: '2-5 פעמים', emoji: '😕' },
-    { label: 'פעם בשבוע', sublabel: 'בערך אחת לשבוע', emoji: '😐' },
-    { label: 'לעיתים רחוקות', sublabel: 'לפעמים נופל', emoji: '🙂' },
-  ]
+// ── Q: Multi choice ──────────────────────────────────────────────────────────
+function MultiQ({ title, subtitle, opts, min, onNext }: {
+  title: string; subtitle?: string
+  opts: { label: string; sublabel?: string; icon?: string }[]
+  min?: number
+  onNext: (v: string[]) => void
+}) {
+  const [sel, setSel] = useState<string[]>([])
+  const toggle = (v: string) =>
+    setSel(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v])
+  const ready = sel.length >= (min ?? 1)
   return (
-    <View style={s.stepWrap}>
-      <View style={s.stepHeader}>
-        <Text style={s.stepQ}>באיזו תדירות{'\n'}זה קורה?</Text>
-        <Text style={s.stepHint}>בלי שיפוטיות — רק מידע</Text>
-      </View>
-      <View style={s.optionsGap}>
+    <View style={s.qWrap}>
+      <Text style={s.qTitle}>{title}</Text>
+      {subtitle && <Text style={s.qSub}>{subtitle}</Text>}
+      <View style={s.optList}>
         {opts.map(o => (
-          <OptionCard
-            key={o.label}
-            label={o.label}
-            sublabel={o.sublabel}
-            emoji={o.emoji}
-            selected={sel === o.label}
-            onPress={() => setSel(o.label)}
-          />
+          <CheckRow key={o.label} {...o} selected={sel.includes(o.label)} onPress={() => toggle(o.label)} />
         ))}
       </View>
-      <ContinueButton onPress={() => onNext(sel)} enabled={!!sel} />
+      <PillBtn label="המשך" onPress={() => onNext(sel)} disabled={!ready} />
     </View>
   )
 }
 
-// ─── Step 3: Age ───────────────────────────────────────────────────────────────
-function Step3({ onNext }: { onNext: (v: number) => void }) {
-  const [age, setAge] = useState(22)
-  return (
-    <View style={s.stepWrap}>
-      <View style={s.stepHeader}>
-        <Text style={s.stepQ}>בן כמה אתה?</Text>
-        <Text style={s.stepHint}>נתאים את התוכן לגיל שלך</Text>
-      </View>
-      <View style={s.ageBox}>
-        <Text style={s.ageBig}>{age}</Text>
-        <Text style={s.ageUnit}>שנים</Text>
-        <Slider
-          style={s.slider}
-          minimumValue={14}
-          maximumValue={70}
-          step={1}
-          value={age}
-          onValueChange={v => setAge(Math.round(v))}
-          minimumTrackTintColor={C.orange}
-          maximumTrackTintColor={C.border}
-          thumbTintColor={C.orange}
-        />
-        <View style={s.sliderLabels}>
-          <Text style={s.sliderLabel}>70</Text>
-          <Text style={s.sliderLabel}>14</Text>
-        </View>
-      </View>
-      <ContinueButton onPress={() => onNext(age)} enabled />
-    </View>
-  )
-}
-
-// ─── Step 4: Main goal ─────────────────────────────────────────────────────────
-function Step4({ onNext }: { onNext: (v: string) => void }) {
+// ── Q: Big two choices ────────────────────────────────────────────────────────
+function BigTwoQ({ title, opts, onNext }: {
+  title: string
+  opts: { label: string; sublabel: string; emoji: string; value: string }[]
+  onNext: (v: string) => void
+}) {
   const [sel, setSel] = useState('')
-  const opts = [
-    { label: 'שיפור עצמי', sublabel: 'דיסציפלינה, אנרגיה, מיקוד', emoji: '🧠' },
-    { label: 'מערכות יחסים', sublabel: 'לשפר את הקשר עם בת הזוג', emoji: '❤️' },
-    { label: 'סיבות דתיות', sublabel: 'שמירת הברית, קדושה', emoji: '✡️' },
-    { label: 'כולם יחד', sublabel: 'אני רוצה הכל', emoji: '⚡' },
-  ]
   return (
-    <View style={s.stepWrap}>
-      <View style={s.stepHeader}>
-        <Text style={s.stepQ}>מה מניע אותך{'\n'}לשנות?</Text>
-        <Text style={s.stepHint}>זו המטרה שנחזיר אותך למסלול</Text>
-      </View>
-      <View style={s.optionsGap}>
+    <View style={s.qWrap}>
+      <Text style={s.qTitle}>{title}</Text>
+      <View style={[s.optList, { gap: 12 }]}>
         {opts.map(o => (
-          <OptionCard
-            key={o.label}
-            label={o.label}
-            sublabel={o.sublabel}
-            emoji={o.emoji}
-            selected={sel === o.label}
-            onPress={() => setSel(o.label)}
-          />
+          <TouchableOpacity key={o.value} onPress={() => setSel(o.value)} activeOpacity={0.8}
+            style={[s.bigCard, sel === o.value && s.bigCardSel]}>
+            <Text style={s.bigCardEmoji}>{o.emoji}</Text>
+            <Text style={[s.bigCardLabel, sel === o.value && s.bigCardLabelSel]}>{o.label}</Text>
+            <Text style={s.bigCardSub}>{o.sublabel}</Text>
+          </TouchableOpacity>
         ))}
       </View>
-      <ContinueButton onPress={() => onNext(sel)} enabled={!!sel} />
+      <PillBtn label="המשך" onPress={() => onNext(sel)} disabled={!sel} />
     </View>
   )
 }
 
-// ─── Step 5: Your Why ──────────────────────────────────────────────────────────
-function Step5({ onNext }: { onNext: (v: string) => void }) {
+// ── Q: Dynamic single (options come from previous answers) ────────────────────
+function DynamicSingleQ({ title, subtitle, options, onNext }: {
+  title: string; subtitle?: string; options: string[]; onNext: (v: string) => void
+}) {
+  const [sel, setSel] = useState('')
+  return (
+    <View style={s.qWrap}>
+      <Text style={s.qTitle}>{title}</Text>
+      {subtitle && <Text style={s.qSub}>{subtitle}</Text>}
+      <View style={s.optList}>
+        {options.map(label => (
+          <RadioRow key={label} label={label} selected={sel === label} onPress={() => setSel(label)} />
+        ))}
+      </View>
+      <PillBtn label="זה הדבר" onPress={() => onNext(sel)} disabled={!sel} />
+    </View>
+  )
+}
+
+// ── Name entry ────────────────────────────────────────────────────────────────
+function NameEntry({ onNext }: { onNext: (name: string) => void }) {
+  const [name, setName] = useState('')
+  return (
+    <View style={s.qWrap}>
+      <Text style={s.hookTitle}>בואו נעשה{'\n'}את זה רשמי.</Text>
+      <Text style={s.hookSub}>השם שלך חותם את המחויבות.</Text>
+      <TextInput
+        value={name}
+        onChangeText={setName}
+        placeholder="הכנס שם"
+        placeholderTextColor={C.dim}
+        style={s.nameInput}
+        textAlign="center"
+        autoFocus
+        returnKeyType="done"
+        onSubmitEditing={() => name.trim() && onNext(name.trim())}
+      />
+      <Text style={s.nameHint}>כתוב את שמך כדי להתחייב</Text>
+      <PillBtn label="אני בפנים" onPress={() => onNext(name.trim())} disabled={name.trim().length < 2} />
+    </View>
+  )
+}
+
+// ── Your Why (skippable) ──────────────────────────────────────────────────────
+function WhyEntry({ onNext }: { onNext: (v: string) => void }) {
   const [text, setText] = useState('')
-  const charMin = 5
-  const ready = text.trim().length >= charMin
-
   return (
-    <View style={s.stepWrap}>
-      <View style={s.stepHeader}>
-        <Text style={s.stepQ}>ה"למה" שלך</Text>
-        <Text style={s.stepHint}>
-          כשהרצון חלש — ה"למה" מחזיר אותך.{'\n'}כתוב משפט אחד שיחזיר אותך למסלול.
-        </Text>
-      </View>
+    <View style={s.qWrap}>
+      <Text style={s.hookTitle}>כשהדחף מגיע,{'\n'}מה תזכור?</Text>
+      <Text style={s.hookSub}>כתוב משהו אישי. זה רק בשבילך.</Text>
       <TextInput
         value={text}
         onChangeText={setText}
-        placeholder="למשל: אני עושה את זה כדי להיות אבא טוב יותר..."
+        placeholder="אני עושה את זה כי..."
         placeholderTextColor={C.dim}
         multiline
-        numberOfLines={5}
-        style={s.textArea}
+        style={s.whyInput}
         textAlign="right"
         textAlignVertical="top"
       />
-      {text.length > 0 && !ready && (
-        <Text style={s.charHint}>המשך לכתוב...</Text>
-      )}
-      <ContinueButton onPress={() => onNext(text.trim())} enabled={ready} />
+      <PillBtn label="המשך" onPress={() => onNext(text.trim())} />
+      <TouchableOpacity onPress={() => onNext('')} style={s.skipBtn}>
+        <Text style={s.skipText}>דלג</Text>
+      </TouchableOpacity>
     </View>
   )
 }
 
-// ─── Step 6: Language style ───────────────────────────────────────────────────
-function Step6({ onNext }: { onNext: (v: 'secular' | 'religious') => void }) {
-  const [sel, setSel] = useState<'secular' | 'religious' | ''>('')
-
+// ── Edu: Dopamine graph ───────────────────────────────────────────────────────
+function EduDopamine({ onNext }: { onNext: () => void }) {
   return (
-    <View style={s.stepWrap}>
-      <View style={s.stepHeader}>
-        <Text style={s.stepQ}>בחר את{'\n'}הסגנון שלך</Text>
-        <Text style={s.stepHint}>נתאים את השפה לעולם שמדבר אליך</Text>
-      </View>
-      <View style={s.optionsGap}>
-        <TouchableOpacity
-          onPress={() => setSel('secular')}
-          style={[s.styleCard, sel === 'secular' && s.styleCardSelected]}
-          activeOpacity={0.75}
-        >
-          <Text style={s.styleEmoji}>🧘</Text>
-          <View style={{ flex: 1, alignItems: 'flex-end' }}>
-            <Text style={[s.styleTitle, sel === 'secular' && { color: C.orange }]}>חילוני / כללי</Text>
-            <Text style={s.styleDesc}>שיפור עצמי, דופמין דיטוקס, משמעת עצמית</Text>
+    <View style={s.hookWrap}>
+      <View style={s.hookCenter}>
+        <Text style={s.hookTitle}>הנה מה{'\n'}שקורה.</Text>
+        <Text style={s.hookSub}>גירוי מהיר מזנק את הדופמין.{'\n'}ואז הבסיס שלך קורס.</Text>
+        {/* Dopamine graph visual */}
+        <View style={s.graphWrap}>
+          <Text style={s.graphLabel}>בסיס</Text>
+          <View style={s.graphLine}>
+            <View style={s.graphSpike} />
+            <View style={s.graphCrash} />
           </View>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setSel('religious')}
-          style={[s.styleCard, sel === 'religious' && s.styleCardSelected]}
-          activeOpacity={0.75}
-        >
-          <Text style={s.styleEmoji}>✡️</Text>
-          <View style={{ flex: 1, alignItems: 'flex-end' }}>
-            <Text style={[s.styleTitle, sel === 'religious' && { color: C.orange }]}>דתי / מסורתי</Text>
-            <Text style={s.styleDesc}>שמירת הברית, שמירת עיניים, קדושה</Text>
-          </View>
-        </TouchableOpacity>
+          <Text style={s.graphCrashLabel}>הנפילה</Text>
+        </View>
+        <Text style={s.hookSub}>כלום אחר לא מרגיש מתגמל.</Text>
       </View>
-      <ContinueButton onPress={() => onNext(sel as 'secular' | 'religious')} enabled={!!sel} label="סיים והתחל" />
+      <PillBtn label="זה מסביר הרבה" onPress={onNext} />
     </View>
   )
 }
 
-// ─── Root ─────────────────────────────────────────────────────────────────────
+// ── Edu: Brain heals (14/30/90) ───────────────────────────────────────────────
+function EduHeal({ onNext }: { onNext: () => void }) {
+  const milestones = [
+    { days: '14', color: '#a78bfa', title: 'הדחפים נחלשים', sub: 'הסערה הראשונית עוברת' },
+    { days: '30', color: '#fb923c', title: 'הבהירות חוזרת', sub: 'מיקוד ואנרגיה משתפרים' },
+    { days: '90', color: '#4ade80', title: 'קו בסיס חדש', sub: 'המוח עוצב מחדש' },
+  ]
+  return (
+    <View style={s.hookWrap}>
+      <View style={s.hookCenter}>
+        <Text style={s.hookTitle}>המוח שלך{'\n'}יכול להחלים.</Text>
+        <View style={s.healList}>
+          {milestones.map((m, i) => (
+            <View key={i} style={s.healRow}>
+              <View style={[s.healDot, { backgroundColor: m.color }]} />
+              <Text style={[s.healDays, { color: m.color }]}>{m.days} ימים</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={s.healTitle}>{m.title}</Text>
+                <Text style={s.healSub}>{m.sub}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      </View>
+      <PillBtn label="אני רוצה את זה" onPress={onNext} />
+    </View>
+  )
+}
+
+// ── Edu: Stats (You're not alone) ─────────────────────────────────────────────
+function EduStats({ onNext }: { onNext: () => void }) {
+  return (
+    <View style={s.hookWrap}>
+      <View style={s.hookCenter}>
+        <Text style={s.hookTitle}>אתה לא{'\n'}לבד.</Text>
+        <Text style={s.hookSub}>אלפי גברים בונים לצידך.</Text>
+        <View style={s.statsRow}>
+          <View style={s.statCard}>
+            <Text style={s.statNum}>10+</Text>
+            <Text style={s.statLabel}>רמות</Text>
+          </View>
+          <View style={s.statCard}>
+            <Text style={s.statNum}>100%</Text>
+            <Text style={s.statLabel}>מבוסס מדע</Text>
+          </View>
+          <View style={s.statCard}>
+            <Text style={s.statNum}>24/7</Text>
+            <Text style={s.statLabel}>תמיכה</Text>
+          </View>
+        </View>
+      </View>
+      <PillBtn label="אני מוכן" onPress={onNext} />
+    </View>
+  )
+}
+
+// ── Task selection screen ─────────────────────────────────────────────────────
+function TaskSelect({ category, title, emoji, subtitle, tasks, min, max, onNext }: {
+  category: string; title: string; emoji: string; subtitle: string
+  tasks: string[]; min: number; max: number
+  onNext: (sel: string[]) => void
+}) {
+  const [sel, setSel] = useState<string[]>([])
+  const toggle = (v: string) => {
+    if (sel.includes(v)) { setSel(p => p.filter(x => x !== v)); return }
+    if (sel.length < max) setSel(p => [...p, v])
+  }
+  const ready = sel.length >= min
+  return (
+    <View style={s.qWrap}>
+      <View style={s.taskHeader}>
+        <Text style={s.taskEmoji}>{emoji}</Text>
+        <Text style={s.taskTitle}>{title}</Text>
+        <Text style={s.taskSub}>{subtitle}</Text>
+        <View style={s.taskPick}>
+          <Text style={s.taskPickText}>בחר {min}–{max}</Text>
+        </View>
+        <Text style={s.taskCount}>{sel.length} נבחרו</Text>
+      </View>
+      <View style={s.optList}>
+        {tasks.map(t => (
+          <CheckRow key={t} label={t} selected={sel.includes(t)} onPress={() => toggle(t)} />
+        ))}
+      </View>
+      <PillBtn label={category === 'evening' ? 'נעל משימות' : 'הבא'} onPress={() => onNext(sel)} disabled={!ready} />
+    </View>
+  )
+}
+
+// ── Plan Ready (summary) ──────────────────────────────────────────────────────
+function PlanReady({ answers, onNext }: { answers: Answers; onNext: () => void }) {
+  const rows = [
+    { icon: '⚠️', label: 'זמן סיכון',    value: answers.dangerTime || 'ערב' },
+    { icon: '🎯', label: 'מטרה ראשית',   value: answers.primaryGoal || answers.goals[0] || 'מיקוד' },
+    { icon: '✅', label: 'משימות יומיות', value: `${(answers.selectedMorningTasks.length + answers.selectedAnytimeTasks.length + answers.selectedEveningTasks.length)} נבחרו` },
+    { icon: '🤖', label: 'תמיכת AI',     value: 'פעיל 24/7' },
+    { icon: '👥', label: 'קהילה',        value: 'מוכן' },
+  ]
+  return (
+    <View style={s.hookWrap}>
+      <View style={s.hookCenter}>
+        <Text style={s.hookTitle}>התוכנית שלך{'\n'}מוכנה.</Text>
+        <View style={s.planCard}>
+          {rows.map((r, i) => (
+            <View key={i} style={[s.planRow, i < rows.length - 1 && s.planRowBorder]}>
+              <Text style={s.planValue}>{r.value}</Text>
+              <Text style={s.planLabel}>{r.label}  {r.icon}</Text>
+            </View>
+          ))}
+        </View>
+        <Text style={s.planBuilt}>נבנתה במיוחד עבורך.</Text>
+      </View>
+      <PillBtn label="התחל את המסע שלי" onPress={onNext} />
+    </View>
+  )
+}
+
+// ── Welcome end screen ────────────────────────────────────────────────────────
+function WelcomeEnd({ name, onDone }: { name: string; onDone: () => void }) {
+  const scale = useRef(new Animated.Value(0.85)).current
+  useEffect(() => {
+    Animated.spring(scale, { toValue: 1, friction: 5, useNativeDriver: true }).start()
+  }, [])
+  return (
+    <View style={s.hookWrap}>
+      <View style={s.hookCenter}>
+        <Animated.Text style={[s.welcomeIcon, { transform: [{ scale }] }]}>⛺</Animated.Text>
+        <Text style={s.hookTitle}>ברוך הבא,{'\n'}{name || 'גיבור'}.</Text>
+        <Text style={s.hookGreen}>הבסיס שלך מחכה.</Text>
+        <Text style={s.hookSub}>יום 1</Text>
+      </View>
+      <PillBtn label="בואו נבנה" onPress={onDone} />
+    </View>
+  )
+}
+
+// ── Main Flow ─────────────────────────────────────────────────────────────────
 export default function OnboardingFlow() {
   const [step, setStep] = useState(0)
-  const [answers, setAnswers] = useState<Record<string, string | number>>({})
+  const [answers, setAnswers] = useState<Answers>(INIT)
   const { completeOnboarding } = useStore()
 
-  const handleNext = (value?: string | number) => {
-    if (step === 0) { setStep(1); return }
+  const upd = (patch: Partial<Answers>) => setAnswers(p => ({ ...p, ...patch }))
+  const next = (patch?: Partial<Answers>) => {
+    if (patch) upd(patch)
+    setStep(s => s + 1)
+  }
+  const back = () => setStep(s => Math.max(0, s - 1))
 
-    const keys = ['habitDuration', 'frequency', 'age', 'mainGoal', 'yourWhy', 'languageStyle']
-    const qIdx = step - 1
-    const newAnswers = { ...answers, [keys[qIdx]]: value! }
-    setAnswers(newAnswers)
+  const finish = (finalAnswers: Answers) => {
+    const data: OnboardingData = {
+      name:                 finalAnswers.name,
+      symptoms:             finalAnswers.symptoms,
+      habitDuration:        finalAnswers.habitDuration,
+      frequency:            finalAnswers.frequency,
+      triedBefore:          finalAnswers.triedBefore,
+      triggers:             finalAnswers.triggers,
+      dangerPlaces:         finalAnswers.dangerPlaces,
+      dangerTime:           finalAnswers.dangerTime,
+      costs:                finalAnswers.costs,
+      goals:                finalAnswers.goals,
+      primaryGoal:          finalAnswers.primaryGoal,
+      motivationType:       finalAnswers.motivationType,
+      yourWhy:              finalAnswers.yourWhy,
+      languageStyle:        finalAnswers.languageStyle,
+      selectedMorningTasks:  finalAnswers.selectedMorningTasks,
+      selectedAnytimeTasks:  finalAnswers.selectedAnytimeTasks,
+      selectedEveningTasks:  finalAnswers.selectedEveningTasks,
+    }
+    completeOnboarding(data)
+    router.replace('/(tabs)')
+  }
 
-    if (step < QUESTION_STEPS) {
-      setStep(step + 1)
-    } else {
-      completeOnboarding({
-        habitDuration: newAnswers.habitDuration as string,
-        frequency: newAnswers.frequency as string,
-        age: newAnswers.age as number,
-        mainGoal: newAnswers.mainGoal as string,
-        yourWhy: newAnswers.yourWhy as string,
-        languageStyle: newAnswers.languageStyle as 'secular' | 'religious',
-      })
-      router.replace('/(tabs)')
+  const renderStep = () => {
+    switch (step) {
+      // ── Phase 1: Hooks ──────────────────────────────────────────────────────
+      case 0:
+        return (
+          <HookScreen
+            title={'ניסית לעצור בעבר.\nעשית כמה ימים.\nאולי שבוע.\nואז משהו קרה.'}
+            btn="כן..."
+            onPress={() => next()}
+          />
+        )
+      case 1:
+        return (
+          <HookScreen
+            title={'תדמיין שיש לך\nשליטה מוחלטת.'}
+            btn="אני רוצה את זה"
+            onPress={() => next()}
+          />
+        )
+
+      // ── Phase 2: Questions ──────────────────────────────────────────────────
+      case 2:
+        return (
+          <MultiQ
+            title="מה אתה מרגיש?"
+            subtitle="בחר כל מה שמתאים."
+            opts={[
+              { label: 'מוטיבציה נמוכה',       icon: '📉' },
+              { label: 'ערפל מוחי',             icon: '🌫️' },
+              { label: 'קושי להתרכז',            icon: '🎯' },
+              { label: 'ביטחון עצמי נמוך',       icon: '😔' },
+              { label: 'בורח מהחיים האמיתיים',   icon: '🚪' },
+              { label: 'פחות עניין בחברה',       icon: '👥' },
+            ]}
+            onNext={v => next({ symptoms: v })}
+          />
+        )
+      case 3:
+        return (
+          <SingleQ
+            title="כמה זמן זה נמשך?"
+            opts={[
+              { label: 'פחות מ-6 חודשים' },
+              { label: 'חצי שנה עד שנה' },
+              { label: '1–3 שנים' },
+              { label: 'יותר מ-3 שנים' },
+            ]}
+            onNext={v => next({ habitDuration: v })}
+          />
+        )
+      case 4:
+        return (
+          <SingleQ
+            title="כמה פעמים זה קורה?"
+            opts={[
+              { label: 'כל יום' },
+              { label: 'כמה פעמים בשבוע' },
+              { label: 'פעם בשבוע' },
+              { label: 'לעיתים רחוקות' },
+            ]}
+            onNext={v => next({ frequency: v })}
+          />
+        )
+      case 5:
+        return (
+          <SingleQ
+            title="ניסית לעצור בעבר?"
+            opts={[
+              { label: 'הרבה פעמים' },
+              { label: 'כמה פעמים' },
+              { label: 'פעם-פעמיים' },
+              { label: 'מעולם לא ברצינות' },
+            ]}
+            onNext={v => next({ triedBefore: v })}
+          />
+        )
+      case 6:
+        return (
+          <MultiQ
+            title="מה בדרך כלל גורם לזה?"
+            subtitle="בחר כל מה שמתאים."
+            opts={[
+              { label: 'לחץ',                  icon: '⚡' },
+              { label: 'שעמום',                icon: '😑' },
+              { label: 'מאוחר בלילה',          icon: '🌙' },
+              { label: 'פשוט לא יכול להתאפק', icon: '🤯' },
+            ]}
+            onNext={v => next({ triggers: v })}
+          />
+        )
+      case 7:
+        return (
+          <MultiQ
+            title="איפה זה בדרך כלל קורה?"
+            subtitle="בחר כל מה שמתאים."
+            opts={[
+              { label: 'חדר השינה',  icon: '🛏️' },
+              { label: 'אמבטיה',    icon: '🚿' },
+              { label: 'כשלבד',     icon: '🚶' },
+              { label: 'ליד המחשב', icon: '💻' },
+            ]}
+            onNext={v => next({ dangerPlaces: v })}
+          />
+        )
+      case 8:
+        return (
+          <SingleQ
+            title="מתי הדחפים הכי חזקים?"
+            opts={[
+              { label: 'בוקר',        icon: '🌅' },
+              { label: 'צהריים',      icon: '☀️' },
+              { label: 'ערב',         icon: '🌆' },
+              { label: 'לילה מאוחר', icon: '🌙' },
+            ]}
+            onNext={v => next({ dangerTime: v })}
+          />
+        )
+      case 9:
+        return (
+          <MultiQ
+            title="מה זה עולה לך?"
+            subtitle="בחר כל מה שמתאים."
+            opts={[
+              { label: 'מערכת יחסים',  icon: '❤️' },
+              { label: 'קריירה / לימודים', icon: '💼' },
+              { label: 'כבוד עצמי',    icon: '🧠' },
+              { label: 'בריאות',       icon: '🏃' },
+              { label: 'זמן',          icon: '⏱️' },
+            ]}
+            onNext={v => next({ costs: v })}
+          />
+        )
+      case 10:
+        return (
+          <MultiQ
+            title="מה אתה רוצה בחזרה?"
+            subtitle="בחר כל מה שמתאים."
+            opts={[
+              { label: 'מיקוד וחדות',       icon: '👁️' },
+              { label: 'ביטחון עצמי',       icon: '⭐' },
+              { label: 'מוטיבציה',           icon: '🔥' },
+              { label: 'חיי חברה חזקים',    icon: '👥' },
+              { label: 'שליטה בדחפים',      icon: '✋' },
+            ]}
+            onNext={v => next({ goals: v })}
+          />
+        )
+      case 11: {
+        const goalOptions = answers.goals.length > 0
+          ? answers.goals
+          : ['מיקוד וחדות', 'ביטחון עצמי', 'מוטיבציה']
+        return (
+          <DynamicSingleQ
+            title="אם היית בוחר רק דבר אחד..."
+            options={goalOptions}
+            onNext={v => next({ primaryGoal: v })}
+          />
+        )
+      }
+      case 12:
+        return (
+          <BigTwoQ
+            title="מה מניע אותך יותר?"
+            opts={[
+              { label: 'להיות טוב יותר',       sublabel: 'אני רוצה לממש את הפוטנציאל שלי', emoji: '⬆️', value: 'growth' },
+              { label: 'לברוח מהכאב',          sublabel: 'אני רוצה להפסיק להרגיש כך',     emoji: '🔄', value: 'escape' },
+            ]}
+            onNext={v => next({ motivationType: v })}
+          />
+        )
+
+      // ── Phase 3: Education ──────────────────────────────────────────────────
+      case 13:
+        return (
+          <HookScreen
+            title={'זו לא בעיה\nשל כוח רצון.'}
+            subtitle="המוח שלך נחטף."
+            btn="מה הכוונה?"
+            onPress={() => next()}
+          />
+        )
+      case 14:
+        return <EduDopamine onNext={() => next()} />
+      case 15:
+        return (
+          <HookScreen
+            title={'כל פעם,\nהנפילה עמוקה יותר.'}
+            subtitle={'החיים האמיתיים מרגישים משעממים.\nהמטרות נראות קשות יותר.\nאתה מרגיש תקוע.'}
+            btn="איך אני מתקן את זה?"
+            onPress={() => next()}
+          />
+        )
+      case 16:
+        return <EduHeal onNext={() => next()} />
+      case 17:
+        return (
+          <HookScreen
+            title={'ההחלמה היא\nלא להתנגד.'}
+            subtitle="היא להחליף."
+            btn="הראה לי"
+            onPress={() => next()}
+          />
+        )
+      case 18:
+        return (
+          <HookScreen
+            title={'ניסית בעבר.'}
+            subtitle="שיטות אחרות נכשלו כי הן רק אמרו לך לעצור."
+            green="זה נותן לך משהו להתחיל."
+            btn="הבנתי"
+            onPress={() => next()}
+          />
+        )
+      case 19:
+        return (
+          <HookScreen
+            title={'החלף.\nבנה מחדש.'}
+            subtitle={'השלם משימות יומיות כדי לעלות רמה.\nצפה בבסיס שלך מתחזק.'}
+            btn="בנה את הבסיס שלי"
+            onPress={() => next()}
+          />
+        )
+      case 20:
+        return <EduStats onNext={() => next()} />
+      case 21:
+        return (
+          <HookScreen
+            title={'זו לא עוד\nאפליקציה\nשתמחק.'}
+            subtitle="זו בנייה מחדש."
+            btn="הבנתי"
+            onPress={() => next()}
+          />
+        )
+      case 22:
+        return (
+          <HookScreen
+            title={'אתה מוכן\nלעשות את\nהעבודה?'}
+            subtitle={'בלי קיצורים. בלי תירוצים.\nרק פעולה עקבית.'}
+            btn="כן, אני מוכן"
+            onPress={() => next()}
+          />
+        )
+
+      // ── Phase 4: Commitment ─────────────────────────────────────────────────
+      case 23:
+        return <NameEntry onNext={v => next({ name: v })} />
+      case 24:
+        return <WhyEntry onNext={v => next({ yourWhy: v })} />
+
+      // ── Phase 5: Tasks ──────────────────────────────────────────────────────
+      case 25:
+        return (
+          <HookScreen
+            title={'המשימות\nהיומיות שלך.'}
+            subtitle={'אלה ההרגלים שיחליפו\nאת הדפוסים הישנים שלך.'}
+            green="השלם אותם כל יום כדי לעלות רמה."
+            btn="בחר משימות"
+            onPress={() => next()}
+          />
+        )
+      case 26:
+        return (
+          <TaskSelect
+            category="morning"
+            title="בוקר"
+            emoji="🌅"
+            subtitle="התחל את יומך בחוזקה לפני שהדחפים מגיעים."
+            tasks={[
+              'אין טלפון 30 דקות ראשונות',
+              'מקלחת קרה',
+              'אימון בוקר',
+              'סידור המיטה',
+              'הליכה בבוקר',
+            ]}
+            min={1} max={3}
+            onNext={v => next({ selectedMorningTasks: v })}
+          />
+        )
+      case 27:
+        return (
+          <TaskSelect
+            category="anytime"
+            title="בכל עת"
+            emoji="⚡"
+            subtitle="מלא את יומך בניצחונות אמיתיים. ידיים עסוקות, מוח צלול."
+            tasks={[
+              'אימון',
+              'קריאת 20 עמודים',
+              'הליכה',
+              'סשן עבודה ממוקדת',
+              'ללא רשתות חברתיות (2 שעות)',
+            ]}
+            min={2} max={4}
+            onNext={v => next({ selectedAnytimeTasks: v })}
+          />
+        )
+      case 28:
+        return (
+          <TaskSelect
+            category="evening"
+            title="ערב"
+            emoji="🌙"
+            subtitle="זו שעת סיכון. הגן על עצמך."
+            tasks={[
+              'טלפון הצידה ב-22:00',
+              'יומן',
+              'קריאה לפני שינה',
+              'מתיחות ערב / יוגה',
+              'תכנון למחר',
+            ]}
+            min={1} max={3}
+            onNext={v => next({ selectedEveningTasks: v })}
+          />
+        )
+
+      // ── Phase 6: End ────────────────────────────────────────────────────────
+      case 29:
+        return <PlanReady answers={answers} onNext={() => next()} />
+      case 30:
+        return (
+          <HookScreen
+            title={'התחל היום.\nלא מחר.'}
+            subtitle={'כל יום שאתה מחכה הוא עוד יום תקוע.\nהתוכנית מוכנה. הבסיס מחכה.'}
+            green="המסע שלך מתחיל עכשיו"
+            btn="פתח את התוכנית"
+            onPress={() => next()}
+          />
+        )
+      case 31:
+        return <WelcomeEnd name={answers.name} onDone={() => finish(answers)} />
+
+      default:
+        return <WelcomeEnd name={answers.name} onDone={() => finish(answers)} />
     }
   }
 
-  const handleBack = () => { if (step > 0) setStep(step - 1) }
-
-  const qSteps = [Step1, Step2, Step3, Step4, Step5, Step6]
+  const showBack = step > 0 && step < 31
+  const showProgress = step >= Q_START && step <= Q_END
 
   return (
     <SafeAreaView style={s.root}>
+      <ProgressBar step={step} />
+      {/* Back button */}
+      {showBack && (
+        <TouchableOpacity onPress={back} style={s.backBtn} activeOpacity={0.7}>
+          <Text style={s.backArrow}>→</Text>
+        </TouchableOpacity>
+      )}
+      {showProgress && (
+        <Text style={s.stepCount}>שלב {step - Q_START + 1} מתוך {Q_COUNT}</Text>
+      )}
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        {/* Header */}
-        <View style={s.header}>
-          {step > 0 ? (
-            <TouchableOpacity onPress={handleBack} style={s.backBtn} activeOpacity={0.7}>
-              <Text style={s.backArrow}>→</Text>
-            </TouchableOpacity>
-          ) : (
-            <View style={{ width: 40 }} />
-          )}
-          <Text style={s.logoText}>שליטה</Text>
-          <View style={{ width: 40 }} />
-        </View>
-
-        <ProgressDots current={step} />
-
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={s.scrollContent}
+          contentContainerStyle={s.scroll}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {step === 0 ? (
-            <WelcomeScreen onNext={handleNext} />
-          ) : (
-            React.createElement(qSteps[step - 1], { onNext: handleNext as any })
-          )}
+          {renderStep()}
         </ScrollView>
-
-        {step > 0 && (
-          <Text style={s.stepCount}>שלב {step} מתוך {QUESTION_STEPS}</Text>
-        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   )
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// ── Styles ────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
+  scroll: { padding: 28, paddingBottom: 40, flexGrow: 1 },
 
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingTop: 8, paddingBottom: 4,
-  },
-  logoText: { fontSize: 20, fontFamily: F.black, color: C.orange },
-  backBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+  progressTrack: { height: 3, backgroundColor: C.border, marginTop: 2 },
+  progressFill:  { height: 3, backgroundColor: C.orange, borderRadius: 99 },
+
+  backBtn:   { position: 'absolute', top: 56, right: 20, zIndex: 10, padding: 8 },
   backArrow: { fontSize: 22, color: C.muted },
+  stepCount: { textAlign: 'center', color: C.dim, fontSize: 12, fontFamily: F.regular, marginTop: 4 },
 
-  dotsRow: { flexDirection: 'row', paddingHorizontal: 24, gap: 6, marginBottom: 8 },
-  dot: { height: 4, borderRadius: 99, flex: 1 },
-  dotDone: { backgroundColor: C.orange },
-  dotActive: { backgroundColor: C.orange },
-  dotInactive: { backgroundColor: C.border },
+  // Hook screens
+  hookWrap:   { flex: 1, justifyContent: 'space-between', minHeight: 580 },
+  hookCenter: { flex: 1, justifyContent: 'center', paddingTop: 40 },
+  hookTitle:  { fontSize: 34, fontFamily: F.black, color: '#ffffff', textAlign: 'center', lineHeight: 42, marginBottom: 16 },
+  hookSub:    { fontSize: 15, fontFamily: F.regular, color: '#8b8b9e', textAlign: 'center', lineHeight: 23, marginTop: 4 },
+  hookGreen:  { fontSize: 15, fontFamily: F.bold, color: '#4ade80', textAlign: 'center', marginTop: 10 },
+  welcomeIcon: { fontSize: 72, textAlign: 'center', marginBottom: 20 },
 
-  scrollContent: { padding: 24, paddingBottom: 32, flexGrow: 1 },
-  stepCount: { textAlign: 'center', color: C.dim, fontSize: 12, fontFamily: F.regular, paddingBottom: 14 },
+  // Question screens
+  qWrap:  { flex: 1, paddingTop: 24 },
+  qTitle: { fontSize: 26, fontFamily: F.black, color: '#ffffff', textAlign: 'right', lineHeight: 34, marginBottom: 6 },
+  qSub:   { fontSize: 13, fontFamily: F.regular, color: '#8b8b9e', textAlign: 'right', marginBottom: 20, lineHeight: 20 },
+  optList: { gap: 8, marginBottom: 28 },
 
-  // Welcome
-  welcomeWrap: { flex: 1, justifyContent: 'space-between', paddingBottom: 8 },
-  welcomeTop: { alignItems: 'center', paddingTop: 24 },
-  welcomeEmoji: { fontSize: 72, marginBottom: 16 },
-  welcomeTitle: { fontSize: 42, fontFamily: F.black, color: C.orange, textAlign: 'center' },
-  welcomeTagline: { fontSize: 16, fontFamily: F.regular, color: C.muted, textAlign: 'center', marginTop: 8 },
-  welcomeCards: { paddingVertical: 24 },
-  featureRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-  featureCard: {
-    flex: 1, backgroundColor: C.card, borderRadius: 14, padding: 16,
-    alignItems: 'center', borderWidth: 1, borderColor: C.border,
+  // Option rows
+  optRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    padding: 16, borderRadius: 14, borderWidth: 1.5,
+    borderColor: '#1e1e2e', backgroundColor: '#12121f',
   },
-  featureEmoji: { fontSize: 28, marginBottom: 6 },
-  featureLabel: { fontSize: 12, fontFamily: F.bold, color: C.text, textAlign: 'center' },
-  welcomeSubtext: { fontSize: 14, fontFamily: F.regular, color: C.muted, textAlign: 'center', lineHeight: 22 },
-  welcomeDisclaimer: { textAlign: 'center', color: C.dim, fontSize: 12, fontFamily: F.regular, marginTop: 12 },
+  optRowSel:   { borderColor: C.orange, backgroundColor: C.orangeDim ?? '#1f150a' },
+  optLabel:    { fontSize: 16, fontFamily: F.bold, color: '#e2e2e8', textAlign: 'right' },
+  optLabelSel: { color: C.orange },
+  optSub:      { fontSize: 12, fontFamily: F.regular, color: '#8b8b9e', textAlign: 'right', marginTop: 2 },
+  optIcon:     { fontSize: 22 },
 
-  // Step wrapper
-  stepWrap: { flex: 1 },
-  stepHeader: { marginBottom: 28 },
-  stepQ: { fontSize: 30, fontFamily: F.black, color: C.text, textAlign: 'right', lineHeight: 38 },
-  stepHint: { fontSize: 14, fontFamily: F.regular, color: C.muted, textAlign: 'right', marginTop: 8, lineHeight: 20 },
+  // Radio
+  circle:    { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: '#3e3e52', alignItems: 'center', justifyContent: 'center' },
+  circleSel: { borderColor: C.orange },
+  circleDot: { width: 11, height: 11, borderRadius: 6, backgroundColor: C.orange },
 
-  optionsGap: { gap: 10, marginBottom: 28 },
+  // Checkbox
+  checkbox:    { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: '#3e3e52', alignItems: 'center', justifyContent: 'center' },
+  checkboxSel: { borderColor: C.orange, backgroundColor: C.orange },
+  checkmark:   { fontSize: 13, color: '#fff', fontFamily: F.bold },
 
-  // Option card
-  optionCard: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end',
-    padding: 18, borderRadius: 16, borderWidth: 1.5, borderColor: C.border,
-    backgroundColor: C.card, gap: 12,
+  // Big two-choice cards
+  bigCard: {
+    padding: 22, borderRadius: 18, borderWidth: 1.5, borderColor: '#1e1e2e',
+    backgroundColor: '#12121f', alignItems: 'center', gap: 6,
   },
-  optionCardSelected: { borderColor: C.orange, backgroundColor: C.orangeDim },
-  optionLabel: { fontSize: 16, fontFamily: F.bold, color: C.text, textAlign: 'right' },
-  optionSublabel: { fontSize: 12, fontFamily: F.regular, color: C.muted, textAlign: 'right', marginTop: 2 },
-  optionEmoji: { fontSize: 26 },
-  checkCircle: {
-    width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: C.border,
-    alignItems: 'center', justifyContent: 'center',
+  bigCardSel:      { borderColor: C.orange, backgroundColor: C.orangeDim ?? '#1f150a' },
+  bigCardEmoji:    { fontSize: 32 },
+  bigCardLabel:    { fontSize: 18, fontFamily: F.bold, color: '#e2e2e8', textAlign: 'center' },
+  bigCardLabelSel: { color: C.orange },
+  bigCardSub:      { fontSize: 13, fontFamily: F.regular, color: '#8b8b9e', textAlign: 'center' },
+
+  // Pill button
+  pill: {
+    backgroundColor: '#ffffff', borderRadius: 100, paddingVertical: 18,
+    paddingHorizontal: 32, alignItems: 'center', marginTop: 8,
   },
-  checkCircleSelected: { borderColor: C.orange },
-  checkInner: { width: 12, height: 12, borderRadius: 6, backgroundColor: C.orange },
+  pillOutline:      { backgroundColor: 'transparent', borderWidth: 2, borderColor: '#ffffff' },
+  pillDisabled:     { backgroundColor: '#1e1e2e' },
+  pillText:         { fontSize: 17, fontFamily: F.bold, color: '#0a0a0a' },
+  pillOutlineText:  { color: '#ffffff' },
+  pillDisabledText: { color: '#3e3e52' },
 
-  // Age
-  ageBox: { alignItems: 'center', paddingVertical: 20, marginBottom: 28 },
-  ageBig: { fontSize: 90, fontFamily: F.black, color: C.orange, lineHeight: 96 },
-  ageUnit: { fontSize: 16, fontFamily: F.regular, color: C.muted, marginBottom: 16 },
-  slider: { width: '100%', height: 40 },
-  sliderLabels: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: 4 },
-  sliderLabel: { fontSize: 12, color: C.dim, fontFamily: F.regular },
-
-  // Text area
-  textArea: {
-    backgroundColor: C.card, borderWidth: 1.5, borderColor: C.border, borderRadius: 14,
-    padding: 16, color: C.text, fontSize: 16, fontFamily: F.regular, minHeight: 140, marginBottom: 10,
+  // Name entry
+  nameInput: {
+    borderWidth: 1.5, borderColor: '#1e1e2e', borderRadius: 14, marginVertical: 20,
+    padding: 18, color: '#ffffff', fontSize: 20, fontFamily: F.bold,
+    backgroundColor: '#12121f', textAlign: 'center',
   },
-  charHint: { color: C.dim, fontSize: 12, fontFamily: F.regular, textAlign: 'right', marginBottom: 16 },
+  nameHint: { color: '#8b8b9e', fontSize: 12, fontFamily: F.regular, textAlign: 'center', marginBottom: 16 },
 
-  // Style cards
-  styleCard: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end',
-    padding: 20, borderRadius: 16, borderWidth: 1.5, borderColor: C.border,
-    backgroundColor: C.card, gap: 14,
+  // Why entry
+  whyInput: {
+    borderWidth: 1.5, borderColor: '#1e1e2e', borderRadius: 14,
+    padding: 16, color: '#ffffff', fontSize: 16, fontFamily: F.regular,
+    backgroundColor: '#12121f', minHeight: 120, marginVertical: 20,
   },
-  styleCardSelected: { borderColor: C.orange, backgroundColor: C.orangeDim },
-  styleEmoji: { fontSize: 32 },
-  styleTitle: { fontSize: 18, fontFamily: F.bold, color: C.text, textAlign: 'right', marginBottom: 4 },
-  styleDesc: { fontSize: 13, fontFamily: F.regular, color: C.muted, textAlign: 'right' },
+  skipBtn: { alignItems: 'center', marginTop: 14 },
+  skipText: { color: '#8b8b9e', fontSize: 15, fontFamily: F.regular },
 
-  // Continue
-  continueBtn: { backgroundColor: C.orange, borderRadius: 16, padding: 18, alignItems: 'center' },
-  continueBtnDisabled: { backgroundColor: C.border },
-  continueBtnText: { fontSize: 17, fontFamily: F.bold, color: '#fff' },
+  // Dopamine graph (symbolic)
+  graphWrap: { alignItems: 'center', marginVertical: 24 },
+  graphLabel: { color: '#8b8b9e', fontSize: 12, fontFamily: F.regular, alignSelf: 'flex-end', marginBottom: 4 },
+  graphLine:  { flexDirection: 'row', alignItems: 'flex-end', gap: 0 },
+  graphSpike: { width: 3, height: 80, backgroundColor: '#a78bfa', borderRadius: 4, marginHorizontal: 2 },
+  graphCrash: { width: 3, height: 30, backgroundColor: '#ef4444', borderRadius: 4, marginLeft: 8, alignSelf: 'flex-end', transform: [{ rotate: '20deg' }] },
+  graphCrashLabel: { color: '#ef4444', fontSize: 11, fontFamily: F.regular, marginTop: 4 },
+
+  // Heal timeline
+  healList: { gap: 16, marginTop: 24, width: '100%' },
+  healRow:  { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  healDot:  { width: 12, height: 12, borderRadius: 6 },
+  healDays: { fontSize: 16, fontFamily: F.bold, width: 70, textAlign: 'right' },
+  healTitle: { fontSize: 15, fontFamily: F.bold, color: '#ffffff', textAlign: 'right' },
+  healSub:   { fontSize: 12, fontFamily: F.regular, color: '#8b8b9e', textAlign: 'right' },
+
+  // Stats
+  statsRow: { flexDirection: 'row', gap: 10, marginTop: 24 },
+  statCard: {
+    flex: 1, backgroundColor: '#12121f', borderRadius: 14, padding: 14,
+    alignItems: 'center', borderWidth: 1, borderColor: '#1e1e2e',
+  },
+  statNum:   { fontSize: 20, fontFamily: F.black, color: '#ffffff' },
+  statLabel: { fontSize: 11, fontFamily: F.regular, color: '#8b8b9e', textAlign: 'center', marginTop: 4 },
+
+  // Task selection
+  taskHeader: { alignItems: 'center', marginBottom: 20 },
+  taskEmoji:  { fontSize: 36, marginBottom: 8 },
+  taskTitle:  { fontSize: 26, fontFamily: F.black, color: '#ffffff' },
+  taskSub:    { fontSize: 13, fontFamily: F.regular, color: '#8b8b9e', textAlign: 'center', marginTop: 4, lineHeight: 20 },
+  taskPick:   { marginTop: 10, paddingHorizontal: 14, paddingVertical: 4, backgroundColor: '#12121f', borderRadius: 99 },
+  taskPickText: { fontSize: 12, fontFamily: F.regular, color: C.orange },
+  taskCount:  { fontSize: 11, color: '#8b8b9e', fontFamily: F.regular, marginTop: 6 },
+
+  // Plan ready
+  planCard: {
+    backgroundColor: '#12121f', borderRadius: 18, overflow: 'hidden',
+    borderWidth: 1, borderColor: '#1e1e2e', marginTop: 20, width: '100%',
+  },
+  planRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 20, paddingVertical: 14,
+  },
+  planRowBorder: { borderBottomWidth: 1, borderBottomColor: '#1e1e2e' },
+  planLabel: { fontSize: 14, fontFamily: F.regular, color: '#8b8b9e', textAlign: 'right' },
+  planValue: { fontSize: 14, fontFamily: F.bold, color: '#ffffff' },
+  planBuilt: { fontSize: 12, fontFamily: F.regular, color: '#8b8b9e', textAlign: 'center', marginTop: 12 },
 })

@@ -29,12 +29,23 @@ export interface Setback {
 }
 
 export interface OnboardingData {
+  name: string
+  symptoms: string[]
   habitDuration: string
   frequency: string
-  age: number
-  mainGoal: string
+  triedBefore: string
+  triggers: string[]
+  dangerPlaces: string[]
+  dangerTime: string
+  costs: string[]
+  goals: string[]
+  primaryGoal: string
+  motivationType: string
   yourWhy: string
   languageStyle: 'secular' | 'religious'
+  selectedMorningTasks: string[]
+  selectedAnytimeTasks: string[]
+  selectedEveningTasks: string[]
 }
 
 export const LEVEL_REQUIREMENTS = [
@@ -58,6 +69,61 @@ function getTodayString(): string {
   return new Date().toISOString().split('T')[0]
 }
 
+// Icons for tasks
+const TASK_ICONS: Record<string, string> = {
+  // Morning
+  'אין טלפון 30 דקות ראשונות': '📵',
+  'מקלחת קרה':                 '🚿',
+  'אימון בוקר':                '🏋️',
+  'סידור המיטה':               '🛏️',
+  'הליכה בבוקר':               '🚶',
+  // Anytime
+  'אימון':                     '💪',
+  'קריאת 20 עמודים':           '📖',
+  'הליכה':                     '🚶',
+  'סשן עבודה ממוקדת':          '🧠',
+  'ללא רשתות חברתיות (2 שעות)': '📵',
+  // Evening
+  'טלפון הצידה ב-22:00':       '📵',
+  'יומן':                      '📓',
+  'קריאה לפני שינה':           '📚',
+  'מתיחות ערב / יוגה':         '🤸',
+  'תכנון למחר':                '📋',
+}
+
+function buildTasksFromOnboarding(data: OnboardingData): Task[] {
+  const today = getTodayString()
+  const tasks: Task[] = []
+
+  const add = (titles: string[], category: Task['category']) => {
+    titles.forEach(title => {
+      tasks.push({
+        id: generateId(),
+        title,
+        category,
+        isCompleted: false,
+        date: today,
+        xpEarned: 0,
+        icon: TASK_ICONS[title] ?? (category === 'morning' ? '🌅' : category === 'evening' ? '🌙' : '⚡'),
+      })
+    })
+  }
+
+  add(data.selectedMorningTasks,  'morning')
+  add(data.selectedAnytimeTasks,  'anytime')
+  add(data.selectedEveningTasks,  'evening')
+
+  // Fallback: if user somehow skipped task selection, add defaults
+  if (tasks.length === 0) {
+    return [
+      { id: generateId(), title: 'מקלחת קרה',         category: 'morning',  isCompleted: false, date: today, xpEarned: 0, icon: '🚿' },
+      { id: generateId(), title: 'אימון',              category: 'anytime',  isCompleted: false, date: today, xpEarned: 0, icon: '💪' },
+      { id: generateId(), title: 'טלפון הצידה ב-22:00', category: 'evening', isCompleted: false, date: today, xpEarned: 0, icon: '📵' },
+    ]
+  }
+  return tasks
+}
+
 const DEFAULT_TASKS = [
   { title: 'מקלחת קרה',            category: 'morning'  as const, icon: '🚿' },
   { title: 'הליכה 15 דק׳',          category: 'morning'  as const, icon: '🚶' },
@@ -73,11 +139,7 @@ const DEFAULT_TASKS = [
 function buildTodayTasks(): Task[] {
   const today = getTodayString()
   return DEFAULT_TASKS.map(t => ({
-    ...t,
-    id: generateId(),
-    date: today,
-    isCompleted: false,
-    xpEarned: 0,
+    ...t, id: generateId(), date: today, isCompleted: false, xpEarned: 0,
   }))
 }
 
@@ -85,10 +147,7 @@ function calculateLevel(streak: number, xp: number): number {
   let level = 1
   for (let i = LEVEL_REQUIREMENTS.length - 1; i >= 1; i--) {
     const req = LEVEL_REQUIREMENTS[i]
-    if (streak >= req.streak && xp >= req.xp) {
-      level = i + 1
-      break
-    }
+    if (streak >= req.streak && xp >= req.xp) { level = i + 1; break }
   }
   return level
 }
@@ -96,6 +155,7 @@ function calculateLevel(streak: number, xp: number): number {
 interface State {
   onboardingCompleted: boolean
   onboardingData: OnboardingData | null
+  userName: string
   currentStreak: number
   longestStreak: number
   xp: number
@@ -128,6 +188,7 @@ export const useStore = create<State & Actions>()(
     (set, get) => ({
       onboardingCompleted: false,
       onboardingData: null,
+      userName: '',
       currentStreak: 0,
       longestStreak: 0,
       xp: 0,
@@ -146,7 +207,8 @@ export const useStore = create<State & Actions>()(
       completeOnboarding: (data) => set({
         onboardingCompleted: true,
         onboardingData: data,
-        tasks: buildTodayTasks(),
+        userName: data.name,
+        tasks: buildTasksFromOnboarding(data),
         lastTaskDate: getTodayString(),
         streakStartDate: getTodayString(),
       }),
