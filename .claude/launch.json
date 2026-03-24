@@ -5,7 +5,8 @@
       "name": "Next.js Dev Server",
       "runtimeExecutable": "/bin/bash",
       "runtimeArgs": ["/Users/messergalili/IM Project/start-dev.sh"],
-      "port": 3000
+      "port": 8081,
+      "autoPort": true
     }
   ]
 }

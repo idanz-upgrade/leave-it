@@ -4,21 +4,30 @@ import { useFonts, Rubik_400Regular, Rubik_700Bold, Rubik_800ExtraBold } from '@
 import * as SplashScreen from 'expo-splash-screen'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { StatusBar } from 'expo-status-bar'
+import { Platform } from 'react-native'
 
-SplashScreen.preventAutoHideAsync()
+if (Platform.OS !== 'web') {
+  SplashScreen.preventAutoHideAsync().catch(() => {})
+}
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Rubik_400Regular,
     Rubik_700Bold,
     Rubik_800ExtraBold,
   })
 
   useEffect(() => {
-    if (fontsLoaded) SplashScreen.hideAsync()
-  }, [fontsLoaded])
+    if (fontsLoaded || fontError) {
+      if (Platform.OS !== 'web') {
+        SplashScreen.hideAsync().catch(() => {})
+      }
+    }
+  }, [fontsLoaded, fontError])
 
-  if (!fontsLoaded) return null
+  // On web: render even if fonts aren't loaded yet (use system fonts as fallback)
+  // On native: wait for fonts before rendering
+  if (Platform.OS !== 'web' && !fontsLoaded && !fontError) return null
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#0a0a0a' }}>
