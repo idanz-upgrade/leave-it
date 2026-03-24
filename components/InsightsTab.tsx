@@ -1,9 +1,8 @@
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  Modal, TextInput, SafeAreaView,
+  Modal, TextInput, SafeAreaView, Animated,
 } from 'react-native'
-import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated'
 import { useStore } from '@/lib/store'
 import { C, F } from '@/lib/theme'
 
@@ -11,18 +10,23 @@ const MOODS = ['😔', '😕', '😐', '🙂', '😄']
 const TRIGGERS = ['שעמום', 'לחץ', 'עייפות', 'בדידות', 'כעס', 'שעות לילה', 'אחר']
 
 function StreakDisplay({ streak, longestStreak }: { streak: number; longestStreak: number }) {
-  const scale = useSharedValue(1)
-  React.useEffect(() => {
+  const scale = useRef(new Animated.Value(1)).current
+
+  useEffect(() => {
     if (streak > 0) {
-      scale.value = withRepeat(withSequence(withTiming(1.05, { duration: 1000 }), withTiming(1, { duration: 1000 })), -1, true)
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(scale, { toValue: 1.05, duration: 1000, useNativeDriver: true }),
+          Animated.timing(scale, { toValue: 1, duration: 1000, useNativeDriver: true }),
+        ])
+      ).start()
     }
   }, [streak])
-  const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }))
 
   return (
     <View style={s.streakCard}>
       <View style={[s.streakGlow, { opacity: streak > 0 ? 1 : 0 }]} />
-      <Animated.Text style={[{ fontSize: 56, marginBottom: 8 }, animStyle]}>
+      <Animated.Text style={[{ fontSize: 56, marginBottom: 8 }, { transform: [{ scale }] }]}>
         {streak > 0 ? '🔥' : '💧'}
       </Animated.Text>
       <Text style={[s.streakNumber, { color: streak > 0 ? C.orange : C.dim }]}>{streak}</Text>

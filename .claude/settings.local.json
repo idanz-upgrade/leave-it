@@ -16,7 +16,8 @@
       "Bash(curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh)",
       "Bash(bash)",
       "mcp__Claude_Preview__preview_start",
-      "Bash(chmod +x \"/Users/messergalili/IM Project/start-dev.sh\")"
+      "Bash(chmod +x \"/Users/messergalili/IM Project/start-dev.sh\")",
+      "Bash(gh auth:*)"
     ]
   }
 }

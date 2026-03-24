@@ -1,32 +1,28 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  Modal, TextInput, SafeAreaView, Alert,
+  Modal, TextInput, SafeAreaView, Alert, Animated,
 } from 'react-native'
-import Animated, {
-  useSharedValue, useAnimatedStyle, withTiming, withRepeat, withSequence,
-} from 'react-native-reanimated'
 import { useStore, Task, LEVEL_REQUIREMENTS } from '@/lib/store'
 import { C, F } from '@/lib/theme'
 
 function FloatingIsland({ level }: { level: number }) {
   const req = LEVEL_REQUIREMENTS[Math.min(level - 1, 9)]
-  const nextReq = LEVEL_REQUIREMENTS[Math.min(level, 9)]
-  const offsetY = useSharedValue(0)
+  const offsetY = useRef(new Animated.Value(0)).current
 
-  React.useEffect(() => {
-    offsetY.value = withRepeat(
-      withSequence(withTiming(-8, { duration: 1500 }), withTiming(0, { duration: 1500 })),
-      -1, true
-    )
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(offsetY, { toValue: -8, duration: 1500, useNativeDriver: true }),
+        Animated.timing(offsetY, { toValue: 0, duration: 1500, useNativeDriver: true }),
+      ])
+    ).start()
   }, [])
-
-  const animStyle = useAnimatedStyle(() => ({ transform: [{ translateY: offsetY.value }] }))
 
   return (
     <View style={s.islandCard}>
       <View style={s.islandGlow} />
-      <Animated.Text style={[s.islandEmoji, animStyle]}>{req.emoji}</Animated.Text>
+      <Animated.Text style={[s.islandEmoji, { transform: [{ translateY: offsetY }] }]}>{req.emoji}</Animated.Text>
       <Text style={s.islandLevelTag}>רמה {level}</Text>
       <Text style={s.islandName}>{req.name}</Text>
       <Text style={s.islandNameEn}>{req.nameEn}</Text>
