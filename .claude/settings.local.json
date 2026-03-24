@@ -14,7 +14,9 @@
       "Bash(brew --version)",
       "Bash(echo $PATH)",
       "Bash(curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh)",
-      "Bash(bash)"
+      "Bash(bash)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(chmod +x \"/Users/messergalili/IM Project/start-dev.sh\")"
     ]
   }
 }
