@@ -28,8 +28,11 @@ export interface Setback {
   createdAt: string
 }
 
+export type Sport = 'football' | 'basketball' | 'tennis' | 'running'
+
 export interface OnboardingData {
   name: string
+  sport: Sport | null
   symptoms: string[]
   habitDuration: string
   frequency: string
@@ -49,16 +52,16 @@ export interface OnboardingData {
 }
 
 export const LEVEL_REQUIREMENTS = [
-  { streak: 0,   xp: 0,     name: 'מחנה בסיס',  nameEn: 'Campsite',   emoji: '⛺' },
-  { streak: 7,   xp: 500,   name: 'מוצב',       nameEn: 'Outpost',    emoji: '🏕️' },
-  { streak: 14,  xp: 1500,  name: 'התיישבות',   nameEn: 'Settlement', emoji: '🏠' },
-  { streak: 21,  xp: 3000,  name: 'מבצר עץ',    nameEn: 'Fort',       emoji: '🗼' },
-  { streak: 30,  xp: 5000,  name: 'מעוז',       nameEn: 'Stronghold', emoji: '🏰' },
-  { streak: 45,  xp: 8000,  name: 'מצודה',      nameEn: 'Citadel',    emoji: '🏯' },
-  { streak: 60,  xp: 12000, name: 'מבצר אבן',   nameEn: 'Fortress',   emoji: '🛡️' },
-  { streak: 75,  xp: 18000, name: 'טירה',       nameEn: 'Castle',     emoji: '⚔️' },
-  { streak: 90,  xp: 25000, name: 'ארמון',      nameEn: 'Palace',     emoji: '👑' },
-  { streak: 120, xp: 40000, name: 'אימפריה',    nameEn: 'Empire',     emoji: '🌟' },
+  { streak: 0,   xp: 0,     name: 'ילד הרחוב',     nameEn: 'Street Kid',          emoji: '🧒', aura: '#a16207', sceneBg: '#1a0e04' },
+  { streak: 7,   xp: 500,   name: 'שחקן נוער',     nameEn: 'Youth Player',        emoji: '⚽', aura: '#15803d', sceneBg: '#031a0a' },
+  { streak: 14,  xp: 1500,  name: 'שחקן קדמות',    nameEn: 'Junior League',       emoji: '🏃', aura: '#1d4ed8', sceneBg: '#030f1a' },
+  { streak: 21,  xp: 3000,  name: 'ספסלאי',        nameEn: 'On The Bench',        emoji: '🎽', aura: '#4338ca', sceneBg: '#08081e' },
+  { streak: 30,  xp: 5000,  name: 'פורץ לראשונה',  nameEn: 'Breaking Through',    emoji: '⚡', aura: '#f97316', sceneBg: '#120800' },
+  { streak: 45,  xp: 8000,  name: 'קפטן הקבוצה',   nameEn: 'Team Captain',        emoji: '🦁', aura: '#dc2626', sceneBg: '#1a0404' },
+  { streak: 60,  xp: 12000, name: 'שחקן נבחרת',    nameEn: 'National Team',       emoji: '🌍', aura: '#2563eb', sceneBg: '#020818' },
+  { streak: 75,  xp: 18000, name: 'אלוף אירופה',   nameEn: 'European Champion',   emoji: '🏆', aura: '#ca8a04', sceneBg: '#141000' },
+  { streak: 90,  xp: 25000, name: 'כדור זהב',       nameEn: "Ballon d'Or",         emoji: '⭐', aura: '#f59e0b', sceneBg: '#1a1000' },
+  { streak: 120, xp: 40000, name: 'אלוף העולם',     nameEn: 'World Cup GOAT',      emoji: '👑', aura: '#fbbf24', sceneBg: '#0d0d0d' },
 ]
 
 function generateId(): string {

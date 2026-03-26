@@ -1,90 +1,159 @@
 import React, { useState, useEffect, useRef } from 'react'
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  Modal, TextInput, SafeAreaView, Alert, Animated,
+  Modal, TextInput, SafeAreaView, Animated, Image, ImageSourcePropType,
 } from 'react-native'
-import { useStore, Task, LEVEL_REQUIREMENTS } from '@/lib/store'
+import { useStore, Task, LEVEL_REQUIREMENTS, Sport } from '@/lib/store'
 import { C, F } from '@/lib/theme'
 
-function FloatingIsland({ level }: { level: number }) {
-  const req = LEVEL_REQUIREMENTS[Math.min(level - 1, 9)]
-  const offsetY = useRef(new Animated.Value(0)).current
+// ── Avatar images per sport per level ──────────────────────────────────────
+const SPORT_IMAGES: Record<Sport, Partial<Record<number, ImageSourcePropType>>> = {
+  football: {
+    1: require('../assets/avatar/level01.png'),
+  },
+  basketball: {},
+  tennis: {},
+  running: {},
+}
+
+function getAvatarImage(sport: Sport | null, level: number): ImageSourcePropType | undefined {
+  return SPORT_IMAGES[sport ?? 'football']?.[level]
+}
+
+// ── Hero Section ────────────────────────────────────────────────────────────
+function HeroSection({ level, sport }: { level: number; sport: Sport | null }) {
+  const idx = Math.min(level - 1, 9)
+  const req = LEVEL_REQUIREMENTS[idx]
+  const aura = req.aura ?? C.orange
+  const image = getAvatarImage(sport, level)
+
+  const offsetY    = useRef(new Animated.Value(0)).current
+  const glowOpacity = useRef(new Animated.Value(0.25)).current
 
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(offsetY, { toValue: -8, duration: 1500, useNativeDriver: true }),
-        Animated.timing(offsetY, { toValue: 0, duration: 1500, useNativeDriver: true }),
+        Animated.timing(offsetY, { toValue: -12, duration: 2400, useNativeDriver: true }),
+        Animated.timing(offsetY, { toValue: 0,   duration: 2400, useNativeDriver: true }),
+      ])
+    ).start()
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowOpacity, { toValue: 0.5,  duration: 2200, useNativeDriver: true }),
+        Animated.timing(glowOpacity, { toValue: 0.25, duration: 2200, useNativeDriver: true }),
       ])
     ).start()
   }, [])
 
   return (
-    <View style={s.islandCard}>
-      <View style={s.islandGlow} />
-      <Animated.Text style={[s.islandEmoji, { transform: [{ translateY: offsetY }] }]}>{req.emoji}</Animated.Text>
-      <Text style={s.islandLevelTag}>רמה {level}</Text>
-      <Text style={s.islandName}>{req.name}</Text>
-      <Text style={s.islandNameEn}>{req.nameEn}</Text>
+    <View style={s.heroSection}>
+      {/* Level badge */}
+      <View style={[s.lvlBadge, { borderColor: aura + '70' }]}>
+        <Text style={[s.lvlBadgeText, { color: aura }]}>רמה {String(level).padStart(2, '0')}</Text>
+      </View>
+
+      {/* Ground glow */}
+      <Animated.View style={[s.heroGlow, { backgroundColor: aura, opacity: glowOpacity }]} />
+
+      {/* Character */}
+      <Animated.View style={[s.heroChar, { transform: [{ translateY: offsetY }] }]}>
+        {image ? (
+          <Image source={image} style={s.heroImage} resizeMode="contain" />
+        ) : (
+          <Text style={s.heroEmoji}>{req.emoji}</Text>
+        )}
+      </Animated.View>
+
+      <Text style={s.heroName}>{req.name}</Text>
+      <Text style={s.heroNameEn}>{req.nameEn.toUpperCase()}</Text>
     </View>
   )
 }
 
-function DailyProgress({ tasks }: { tasks: Task[] }) {
-  const completed = tasks.filter(t => t.isCompleted).length
-  const total = tasks.length
-  const pct = total > 0 ? completed / total : 0
+// ── Stats HUD ───────────────────────────────────────────────────────────────
+function StatsHUD({ streak, xp, level }: { streak: number; xp: number; level: number }) {
+  return (
+    <View style={s.statsHUD}>
+      <View style={s.statCol}>
+        <Text style={s.statValue}>{streak}</Text>
+        <Text style={s.statLabel}>ימים ברצף</Text>
+      </View>
+      <View style={s.statDivider} />
+      <View style={s.statCol}>
+        <Text style={s.statValue}>{level}</Text>
+        <Text style={s.statLabel}>רמה</Text>
+      </View>
+      <View style={s.statDivider} />
+      <View style={s.statCol}>
+        <Text style={[s.statValue, { color: C.orange }]}>{xp.toLocaleString()}</Text>
+        <Text style={s.statLabel}>ניקוד</Text>
+      </View>
+    </View>
+  )
+}
+
+// ── XP Progress ─────────────────────────────────────────────────────────────
+function XPProgress({ level, xp }: { level: number; xp: number }) {
+  const currentReq = LEVEL_REQUIREMENTS[Math.min(level - 1, 9)]
+  const nextReq = LEVEL_REQUIREMENTS[Math.min(level, 9)]
+
+  if (level >= 10) {
+    return (
+      <View style={s.xpBarWrap}>
+        <Text style={[s.xpCenter, { color: C.orange }]}>רמה מקסימלית — אלוף עולם</Text>
+      </View>
+    )
+  }
+
+  const currentXP = xp - currentReq.xp
+  const neededXP  = nextReq.xp - currentReq.xp
+  const pct = Math.min(Math.max(currentXP / neededXP, 0), 1)
 
   return (
-    <View style={s.progressCard}>
-      <View style={s.progressRow}>
-        <Text style={[s.progressPct, { color: pct === 1 ? C.green : C.orange }]}>
-          {Math.round(pct * 100)}%
-        </Text>
-        <Text style={s.progressLabel}>היום: {completed}/{total} הושלמו</Text>
+    <View style={s.xpBarWrap}>
+      <View style={s.xpBarRow}>
+        <Text style={s.xpLvl}>רמה {level}</Text>
+        <Text style={s.xpCenter}>{currentXP.toLocaleString()} / {neededXP.toLocaleString()} ניקוד</Text>
+        <Text style={[s.xpLvl, { color: C.orange }]}>רמה {level + 1}</Text>
       </View>
-      <View style={s.progressBg}>
-        <Animated.View style={[s.progressFill, {
-          width: `${pct * 100}%`,
-          backgroundColor: pct === 1 ? C.green : C.orange,
-        }]} />
+      <View style={s.xpTrack}>
+        <View style={[s.xpFill, { width: `${pct * 100}%` as any }]} />
       </View>
+      <Text style={s.xpNextName}>{nextReq.name} ←</Text>
     </View>
   )
 }
 
-function TaskItem({ task }: { task: Task }) {
+// ── Mission Row ─────────────────────────────────────────────────────────────
+function MissionRow({ task }: { task: Task }) {
   const { toggleTask, deleteTask } = useStore()
   const [menuOpen, setMenuOpen] = useState(false)
 
   return (
-    <View style={s.taskRow}>
-      <TouchableOpacity onPress={() => toggleTask(task.id)} style={s.taskCheck} activeOpacity={0.7}>
-        <View style={[s.checkCircle, task.isCompleted && s.checkCircleDone]}>
+    <View style={s.missionRow}>
+      <TouchableOpacity onPress={() => toggleTask(task.id)} style={s.missionCheck} activeOpacity={0.7}>
+        <View style={[s.checkBox, task.isCompleted && s.checkBoxDone]}>
           {task.isCompleted && <Text style={s.checkMark}>✓</Text>}
         </View>
       </TouchableOpacity>
 
-      <Text style={s.taskIcon}>{task.icon}</Text>
-
-      <Text style={[s.taskTitle, task.isCompleted && s.taskTitleDone]} numberOfLines={1}>
+      <Text style={[s.missionTitle, task.isCompleted && s.missionTitleDone]} numberOfLines={1}>
         {task.title}
       </Text>
 
-      {task.isCompleted && <Text style={s.xpBadge}>+50 XP</Text>}
-
-      <TouchableOpacity onPress={() => setMenuOpen(true)} style={s.menuBtn} activeOpacity={0.7}>
-        <Text style={{ color: C.dim, fontSize: 18 }}>⋮</Text>
-      </TouchableOpacity>
+      {task.isCompleted ? (
+        <Text style={s.xpDone}>+50 XP</Text>
+      ) : (
+        <TouchableOpacity onPress={() => setMenuOpen(true)} style={s.menuBtn} activeOpacity={0.7}>
+          <Text style={{ color: '#333', fontSize: 18 }}>···</Text>
+        </TouchableOpacity>
+      )}
 
       <Modal visible={menuOpen} transparent animationType="fade">
         <TouchableOpacity style={s.menuOverlay} onPress={() => setMenuOpen(false)} activeOpacity={1}>
           <View style={s.menuBox}>
-            <TouchableOpacity
-              onPress={() => { deleteTask(task.id); setMenuOpen(false) }}
-              style={s.menuItem}
-            >
-              <Text style={s.menuItemDelete}>🗑 מחק משימה</Text>
+            <TouchableOpacity onPress={() => { deleteTask(task.id); setMenuOpen(false) }} style={s.menuItem}>
+              <Text style={s.menuDelete}>מחק משימה</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -93,23 +162,26 @@ function TaskItem({ task }: { task: Task }) {
   )
 }
 
+// ── Add Task Modal ──────────────────────────────────────────────────────────
 function AddTaskModal({ category, onClose }: { category: Task['category']; onClose: () => void }) {
   const { addTask } = useStore()
   const [title, setTitle] = useState('')
-  const labels = { morning: 'שגרת בוקר', anytime: 'במהלך היום', evening: 'שגרת ערב' }
+  const labels: Record<Task['category'], string> = {
+    morning: 'שגרת בוקר',
+    anytime: 'במהלך היום',
+    evening: 'שגרת ערב',
+  }
 
   const handleAdd = () => {
-    if (title.trim()) { addTask({ title: title.trim(), category, icon: '✅' }); onClose() }
+    if (title.trim()) { addTask({ title: title.trim(), category, icon: '' }); onClose() }
   }
 
   return (
     <Modal visible transparent animationType="slide">
       <TouchableOpacity style={s.modalOverlay} onPress={onClose} activeOpacity={1}>
         <TouchableOpacity activeOpacity={1} style={s.bottomSheet}>
-          <View style={s.bottomSheetHeader}>
-            <TouchableOpacity onPress={onClose}><Text style={{ color: C.dim, fontSize: 20 }}>✕</Text></TouchableOpacity>
-            <Text style={s.bottomSheetTitle}>הוסף משימה — {labels[category]}</Text>
-          </View>
+          <View style={s.sheetHandle} />
+          <Text style={s.sheetTitle}>{labels[category]}</Text>
           <TextInput
             value={title}
             onChangeText={setTitle}
@@ -129,188 +201,251 @@ function AddTaskModal({ category, onClose }: { category: Task['category']; onClo
   )
 }
 
-function TaskCategory({ title, category, tasks }: { title: string; category: Task['category']; tasks: Task[] }) {
+// ── Mission Section ─────────────────────────────────────────────────────────
+const TIME_LABELS: Record<Task['category'], string> = {
+  morning: 'בוקר',
+  anytime: 'במהלך היום',
+  evening: 'ערב',
+}
+
+function MissionSection({ category, tasks }: { category: Task['category']; tasks: Task[] }) {
   const [showAdd, setShowAdd] = useState(false)
   const catTasks = tasks.filter(t => t.category === category)
-  const allDone = catTasks.length > 0 && catTasks.every(t => t.isCompleted)
+  const doneCount = catTasks.filter(t => t.isCompleted).length
+  const allDone = catTasks.length > 0 && doneCount === catTasks.length
 
   return (
-    <View style={s.categoryCard}>
-      <View style={s.categoryHeader}>
-        <TouchableOpacity onPress={() => setShowAdd(true)} style={s.addCatBtn} activeOpacity={0.7}>
-          <Text style={{ color: C.dim, fontSize: 16 }}>+</Text>
+    <View style={s.missionSection}>
+      <View style={s.missionCatHeader}>
+        <TouchableOpacity onPress={() => setShowAdd(true)} style={s.addMissionBtn} activeOpacity={0.7}>
+          <Text style={{ color: C.orange, fontSize: 20, lineHeight: 20 }}>+</Text>
         </TouchableOpacity>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          {allDone && <Text style={s.doneBadge}>✓ הושלם</Text>}
-          <Text style={s.categoryTitle}>{title}</Text>
+          <Text style={[s.missionCat, allDone && { color: C.green }]}>{TIME_LABELS[category]}</Text>
+          <Text style={s.missionCount}>{doneCount}/{catTasks.length}</Text>
         </View>
       </View>
 
-      {catTasks.map(task => <TaskItem key={task.id} task={task} />)}
-      {catTasks.length === 0 && (
-        <Text style={s.emptyText}>לחץ + להוספת משימה</Text>
-      )}
+      {catTasks.map(t => <MissionRow key={t.id} task={t} />)}
+      {catTasks.length === 0 && <Text style={s.emptyMission}>הוסף משימה ראשונה</Text>}
 
       {showAdd && <AddTaskModal category={category} onClose={() => setShowAdd(false)} />}
     </View>
   )
 }
 
-function PanicModal({ onClose }: { onClose: () => void }) {
+// ── SOS Modal ───────────────────────────────────────────────────────────────
+function SOSModal({ onClose }: { onClose: () => void }) {
   const { usePanicButton } = useStore()
-  const handleSurvived = () => { usePanicButton(); onClose() }
 
   return (
     <Modal visible transparent animationType="fade">
-      <View style={s.panicOverlay}>
-        <TouchableOpacity style={s.panicClose} onPress={onClose}>
-          <Text style={{ color: C.dim, fontSize: 20 }}>✕</Text>
+      <View style={s.sosOverlay}>
+        <TouchableOpacity style={s.sosCloseBtn} onPress={onClose}>
+          <Text style={{ color: C.dim, fontSize: 22 }}>✕</Text>
         </TouchableOpacity>
 
-        <View style={s.panicContent}>
-          <Text style={{ fontSize: 64 }}>🛡️</Text>
-          <Text style={s.panicTitle}>רגע של חולשה</Text>
-          <Text style={s.panicSubtitle}>זה בסדר. תנשום. אתה חזק יותר מהדחף הזה.</Text>
+        <View style={s.sosContent}>
+          <Text style={s.sosTitle}>עצור</Text>
+          <Text style={s.sosSubtitle}>רגע של חולשה — זה בסדר. תנשום. אתה חזק יותר מהדחף הזה.</Text>
 
-          <View style={s.panicTip}>
-            <Text style={s.panicTipText}>💡 עכשיו: עשה 20 שכיבות סמיכה — עד שהגוף ישכח מה רצה.</Text>
+          <View style={s.sosTip}>
+            <Text style={s.sosTipLabel}>PHYSICAL RESET</Text>
+            <Text style={s.sosTipText}>עשה 20 שכיבות סמיכה — עד שהגוף ישכח מה רצה.</Text>
           </View>
 
-          <View style={s.panicTip}>
-            <Text style={s.panicTipText}>🌬️ נשימה: שאף 4 שניות, עצור 4, נשוף 8. חזור 3 פעמים.</Text>
+          <View style={s.sosTip}>
+            <Text style={s.sosTipLabel}>BREATHING</Text>
+            <Text style={s.sosTipText}>שאף 4 שניות · עצור 4 · נשוף 8 · חזור 3 פעמים.</Text>
           </View>
         </View>
 
-        <TouchableOpacity onPress={handleSurvived} style={s.survivedBtn} activeOpacity={0.85}>
-          <Text style={s.survivedBtnText}>עברתי את זה! +100 XP 💪</Text>
+        <TouchableOpacity
+          onPress={() => { usePanicButton(); onClose() }}
+          style={s.survivedBtn}
+          activeOpacity={0.85}
+        >
+          <Text style={s.survivedBtnText}>עברתי את זה — +100 XP</Text>
         </TouchableOpacity>
       </View>
     </Modal>
   )
 }
 
+// ── Main Screen ─────────────────────────────────────────────────────────────
 export default function BaseTab() {
-  const { tasks, level, xp, currentStreak } = useStore()
-  const [panicOpen, setPanicOpen] = useState(false)
-  const nextReq = LEVEL_REQUIREMENTS[Math.min(level, 9)]
+  const { tasks, level, xp, currentStreak, onboardingData } = useStore()
+  const [sosOpen, setSosOpen] = useState(false)
+  const sport = onboardingData?.sport ?? null
+
+  const doneTasks  = tasks.filter((t: Task) => t.isCompleted).length
+  const totalTasks = tasks.length
 
   return (
     <SafeAreaView style={s.container}>
-      {/* Top bar */}
-      <View style={s.topBar}>
-        <View>
-          <Text style={s.streakBadge}>🔥 {currentStreak} ימים</Text>
-          <Text style={s.xpBadgeTop}>⚡ {xp} XP</Text>
-        </View>
-        <Text style={s.screenTitle}>הבסיס שלי</Text>
-      </View>
+      <StatsHUD streak={currentStreak} xp={xp} level={level} />
 
-      <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
-        <FloatingIsland level={level} />
-        <DailyProgress tasks={tasks} />
+      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+        <HeroSection level={level} sport={sport} />
+        <XPProgress level={level} xp={xp} />
 
-        {/* Next level progress */}
-        <View style={s.nextLevelCard}>
-          <View style={s.nextLevelRow}>
-            <Text style={s.nextLevelTarget}>{nextReq.name} ←</Text>
-            <Text style={s.nextLevelLabel}>הרמה הבאה</Text>
+        {/* Daily Missions block */}
+        <View style={s.missionsBlock}>
+          <View style={s.missionsHeader}>
+            <View style={[
+              s.missionsBadge,
+              doneTasks === totalTasks && totalTasks > 0 && s.missionsBadgeDone,
+            ]}>
+              <Text style={[
+                s.missionsBadgeText,
+                doneTasks === totalTasks && totalTasks > 0 && { color: C.green },
+              ]}>
+                {doneTasks}/{totalTasks}
+              </Text>
+            </View>
+            <Text style={s.missionsTitle}>משימות יומיות</Text>
           </View>
-          <View style={s.nextLevelStats}>
-            <Text style={s.nextLevelStat}>🔥 {nextReq.streak} ימי Streak</Text>
-            <Text style={s.nextLevelStat}>⚡ {nextReq.xp.toLocaleString()} XP</Text>
-          </View>
+
+          <MissionSection category="morning" tasks={tasks} />
+          <View style={s.sectionDivider} />
+          <MissionSection category="anytime" tasks={tasks} />
+          <View style={s.sectionDivider} />
+          <MissionSection category="evening" tasks={tasks} />
         </View>
 
-        <TaskCategory title="שגרת בוקר" category="morning" tasks={tasks} />
-        <TaskCategory title="במהלך היום" category="anytime" tasks={tasks} />
-        <TaskCategory title="שגרת ערב" category="evening" tasks={tasks} />
-
-        <View style={{ height: 100 }} />
+        <View style={{ height: 120 }} />
       </ScrollView>
 
-      {/* Panic Button */}
-      <TouchableOpacity onPress={() => setPanicOpen(true)} style={s.panicBtn} activeOpacity={0.85}>
-        <Text style={s.panicBtnText}>⚠️  צריך עזרה? לחץ כאן</Text>
+      {/* SOS floating button */}
+      <TouchableOpacity onPress={() => setSosOpen(true)} style={s.sosBtn} activeOpacity={0.8}>
+        <Text style={s.sosBtnText}>חירום</Text>
       </TouchableOpacity>
 
-      {panicOpen && <PanicModal onClose={() => setPanicOpen(false)} />}
+      {sosOpen && <SOSModal onClose={() => setSosOpen(false)} />}
     </SafeAreaView>
   )
 }
 
+// ── Styles ──────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
-  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12 },
-  screenTitle: { fontSize: 22, fontFamily: F.black, color: C.text },
-  streakBadge: { fontSize: 13, color: C.dim, fontFamily: F.regular },
-  xpBadgeTop: { fontSize: 13, color: C.orange, fontFamily: F.bold },
-  scrollContent: { paddingHorizontal: 16, gap: 12, paddingBottom: 20 },
+  scroll:    { paddingBottom: 20 },
 
-  islandCard: { backgroundColor: C.card, borderRadius: 20, borderWidth: 1, borderColor: C.border, padding: 24, alignItems: 'center', overflow: 'hidden' },
-  islandGlow: { position: 'absolute', top: 0, left: 0, right: 0, height: 80, backgroundColor: C.orangeDim },
-  islandEmoji: { fontSize: 64, marginBottom: 12 },
-  islandLevelTag: { fontSize: 11, color: C.dim, fontFamily: F.bold, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4 },
-  islandName: { fontSize: 20, fontFamily: F.black, color: C.text },
-  islandNameEn: { fontSize: 12, color: C.dim, fontFamily: F.regular, marginTop: 2 },
-
-  progressCard: { backgroundColor: C.card, borderRadius: 14, borderWidth: 1, borderColor: C.border, padding: 16 },
-  progressRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  progressLabel: { fontSize: 14, color: C.muted, fontFamily: F.regular },
-  progressPct: { fontSize: 14, fontFamily: F.bold },
-  progressBg: { backgroundColor: C.border, borderRadius: 99, height: 8, overflow: 'hidden' },
-  progressFill: { height: '100%', borderRadius: 99 },
-
-  nextLevelCard: { backgroundColor: C.card, borderRadius: 12, borderWidth: 1, borderColor: C.border, padding: 14 },
-  nextLevelRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  nextLevelLabel: { fontSize: 13, color: C.muted, fontFamily: F.regular },
-  nextLevelTarget: { fontSize: 13, color: C.orange, fontFamily: F.bold },
-  nextLevelStats: { flexDirection: 'row', gap: 16 },
-  nextLevelStat: { fontSize: 12, color: C.dim, fontFamily: F.regular },
-
-  categoryCard: { backgroundColor: C.card, borderRadius: 14, borderWidth: 1, borderColor: C.border, padding: 16 },
-  categoryHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  categoryTitle: { fontSize: 13, fontFamily: F.bold, color: C.muted, letterSpacing: 1 },
-  doneBadge: { fontSize: 11, color: C.green, fontFamily: F.bold },
-  addCatBtn: { width: 28, height: 28, borderRadius: 6, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center' },
-  emptyText: { color: '#333', fontSize: 14, textAlign: 'center', paddingVertical: 12, fontFamily: F.regular },
-
-  taskRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#1f1f1f' },
-  taskCheck: { padding: 2 },
-  checkCircle: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: '#3a3a3a', alignItems: 'center', justifyContent: 'center' },
-  checkCircleDone: { backgroundColor: C.green, borderColor: C.green },
-  checkMark: { color: '#fff', fontSize: 13, fontFamily: F.bold },
-  taskIcon: { fontSize: 16 },
-  taskTitle: { flex: 1, fontSize: 15, color: C.text, fontFamily: F.regular, textAlign: 'right' },
-  taskTitleDone: { color: '#4a4a4a', textDecorationLine: 'line-through' },
-  xpBadge: { fontSize: 11, color: C.green, fontFamily: F.bold },
-  menuBtn: { padding: 4 },
-  menuOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  menuBox: { backgroundColor: '#222', borderRadius: 10, padding: 4, minWidth: 160, borderWidth: 1, borderColor: '#333' },
-  menuItem: { padding: 14 },
-  menuItemDelete: { color: C.red, fontSize: 14, fontFamily: F.regular, textAlign: 'right' },
-
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' },
-  bottomSheet: { backgroundColor: C.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40 },
-  bottomSheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  bottomSheetTitle: { fontSize: 18, fontFamily: F.bold, color: C.text },
-  addInput: { backgroundColor: '#111', borderWidth: 1.5, borderColor: '#333', borderRadius: 10, padding: 14, color: C.text, fontSize: 16, fontFamily: F.regular, marginBottom: 16 },
-  addBtn: { backgroundColor: C.orange, borderRadius: 12, padding: 14, alignItems: 'center' },
-  addBtnText: { color: '#fff', fontSize: 16, fontFamily: F.bold },
-
-  panicBtn: {
-    position: 'absolute', bottom: 80, left: 16, right: 16,
-    backgroundColor: C.orange, borderRadius: 16, padding: 18,
-    alignItems: 'center', shadowColor: C.orange, shadowOpacity: 0.5, shadowRadius: 16, shadowOffset: { width: 0, height: 4 }, elevation: 8,
+  // Stats HUD
+  statsHUD: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 24, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: '#ffffff08',
   },
-  panicBtnText: { color: '#fff', fontSize: 16, fontFamily: F.bold },
+  statCol:     { flex: 1, alignItems: 'center' },
+  statValue:   { fontSize: 20, fontFamily: F.black, color: C.text, letterSpacing: 0.5 },
+  statLabel:   { fontSize: 9, fontFamily: F.bold, color: C.dim, letterSpacing: 2, marginTop: 2 },
+  statDivider: { width: 1, height: 32, backgroundColor: '#1e1e1e' },
 
-  panicOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.96)', padding: 24, justifyContent: 'space-between' },
-  panicClose: { alignSelf: 'flex-end', padding: 8, marginTop: 20 },
-  panicContent: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 20 },
-  panicTitle: { fontSize: 28, fontFamily: F.black, color: C.orange, textAlign: 'center' },
-  panicSubtitle: { fontSize: 16, fontFamily: F.regular, color: C.muted, textAlign: 'center', lineHeight: 24, maxWidth: 300 },
-  panicTip: { backgroundColor: C.card, borderRadius: 16, borderWidth: 1, borderColor: C.border, padding: 20, width: '100%' },
-  panicTipText: { color: C.text, fontSize: 15, fontFamily: F.regular, textAlign: 'right', lineHeight: 24 },
-  survivedBtn: { backgroundColor: C.green, borderRadius: 14, padding: 18, alignItems: 'center', marginBottom: 10 },
-  survivedBtnText: { color: '#fff', fontSize: 17, fontFamily: F.bold },
+  // Hero
+  heroSection: { alignItems: 'center', paddingTop: 24, paddingBottom: 8, position: 'relative' },
+  lvlBadge: {
+    position: 'absolute', top: 16, left: 20,
+    borderWidth: 1, borderRadius: 4,
+    paddingHorizontal: 10, paddingVertical: 4,
+    backgroundColor: '#ffffff06',
+  },
+  lvlBadgeText: { fontSize: 10, fontFamily: F.black, letterSpacing: 1 },
+  heroGlow: {
+    position: 'absolute', bottom: 40,
+    width: 220, height: 50, borderRadius: 110,
+    alignSelf: 'center',
+  },
+  heroChar:   { alignItems: 'center' },
+  heroImage:  { width: 260, height: 300 },
+  heroEmoji:  { fontSize: 110 },
+  heroName:   { fontSize: 26, fontFamily: F.black, color: C.text, marginTop: 8 },
+  heroNameEn: { fontSize: 10, color: C.dim, fontFamily: F.black, letterSpacing: 3, marginTop: 4 },
+
+  // XP bar
+  xpBarWrap: { paddingHorizontal: 20, paddingVertical: 16 },
+  xpBarRow:  { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  xpLvl:     { fontSize: 10, fontFamily: F.black, color: C.dim, letterSpacing: 1.5 },
+  xpCenter:  { fontSize: 11, fontFamily: F.bold, color: C.muted },
+  xpTrack:   { height: 3, backgroundColor: '#1e1e1e', borderRadius: 2, overflow: 'hidden' },
+  xpFill:    { height: '100%', backgroundColor: C.orange, borderRadius: 2 },
+  xpNextName:{ fontSize: 10, color: C.orange, fontFamily: F.bold, textAlign: 'right', marginTop: 8, letterSpacing: 0.5 },
+
+  // Missions block
+  missionsBlock: {
+    marginHorizontal: 16,
+    backgroundColor: C.card,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#ffffff06',
+    overflow: 'hidden',
+  },
+  missionsHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end',
+    paddingHorizontal: 16, paddingVertical: 14, gap: 10,
+    borderBottomWidth: 1, borderBottomColor: '#ffffff06',
+  },
+  missionsTitle:       { fontSize: 10, fontFamily: F.black, color: C.dim, letterSpacing: 2.5 },
+  missionsBadge:       { borderWidth: 1, borderColor: '#2a2a2a', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+  missionsBadgeDone:   { borderColor: C.green + '50', backgroundColor: C.green + '12' },
+  missionsBadgeText:   { fontSize: 10, fontFamily: F.bold, color: C.dim },
+  sectionDivider:      { height: 1, backgroundColor: '#ffffff05', marginHorizontal: 16 },
+
+  // Mission section
+  missionSection:   { paddingHorizontal: 16, paddingVertical: 12 },
+  missionCatHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  missionCat:       { fontSize: 9, fontFamily: F.black, color: C.dim, letterSpacing: 2.5 },
+  missionCount:     { fontSize: 9, fontFamily: F.bold, color: '#2a2a2a' },
+  addMissionBtn:    { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
+  emptyMission:     { color: '#2a2a2a', fontSize: 13, fontFamily: F.regular, paddingVertical: 8, textAlign: 'right' },
+
+  // Mission row
+  missionRow:       { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
+  missionCheck:     { padding: 2 },
+  checkBox:         { width: 20, height: 20, borderRadius: 4, borderWidth: 1.5, borderColor: '#2a2a2a', alignItems: 'center', justifyContent: 'center' },
+  checkBoxDone:     { backgroundColor: C.green, borderColor: C.green },
+  checkMark:        { color: '#fff', fontSize: 11, fontFamily: F.black },
+  missionTitle:     { flex: 1, fontSize: 14, color: C.text, fontFamily: F.regular, textAlign: 'right' },
+  missionTitleDone: { color: '#2a2a2a', textDecorationLine: 'line-through' },
+  xpDone:           { fontSize: 10, color: C.green, fontFamily: F.bold, letterSpacing: 0.5 },
+  menuBtn:          { padding: 4 },
+  menuOverlay:      { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
+  menuBox:          { backgroundColor: '#1a1a1a', borderRadius: 10, padding: 4, minWidth: 160, borderWidth: 1, borderColor: '#2a2a2a' },
+  menuItem:         { padding: 14 },
+  menuDelete:       { color: C.red, fontSize: 14, fontFamily: F.regular, textAlign: 'right' },
+
+  // Bottom sheet
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
+  bottomSheet:  { backgroundColor: '#141414', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 44 },
+  sheetHandle:  { width: 36, height: 4, backgroundColor: '#2a2a2a', borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
+  sheetTitle:   { fontSize: 16, fontFamily: F.bold, color: C.text, textAlign: 'right', marginBottom: 16 },
+  addInput: {
+    backgroundColor: '#0d0d0d', borderWidth: 1.5, borderColor: '#2a2a2a',
+    borderRadius: 10, padding: 14, color: C.text, fontSize: 15,
+    fontFamily: F.regular, marginBottom: 16,
+  },
+  addBtn:     { backgroundColor: C.orange, borderRadius: 10, padding: 14, alignItems: 'center' },
+  addBtnText: { color: '#fff', fontSize: 15, fontFamily: F.bold },
+
+  // SOS floating button
+  sosBtn: {
+    position: 'absolute', bottom: 92, right: 20,
+    width: 52, height: 52, borderRadius: 26,
+    backgroundColor: '#120505',
+    borderWidth: 1.5, borderColor: C.red + '60',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  sosBtnText: { fontSize: 9, fontFamily: F.black, color: C.red, letterSpacing: 0.5 },
+
+  // SOS modal
+  sosOverlay:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.97)', padding: 24, justifyContent: 'space-between' },
+  sosCloseBtn:   { alignSelf: 'flex-end', padding: 8, marginTop: 20 },
+  sosContent:    { flex: 1, justifyContent: 'center', gap: 24 },
+  sosTitle:      { fontSize: 36, fontFamily: F.black, color: C.red, textAlign: 'center', letterSpacing: 3 },
+  sosSubtitle:   { fontSize: 15, fontFamily: F.regular, color: C.muted, textAlign: 'center', lineHeight: 24 },
+  sosTip:        { backgroundColor: '#0d0d0d', borderRadius: 12, borderWidth: 1, borderColor: '#1e1e1e', padding: 20 },
+  sosTipLabel:   { fontSize: 9, fontFamily: F.black, color: C.dim, letterSpacing: 2.5, marginBottom: 8 },
+  sosTipText:    { color: C.text, fontSize: 15, fontFamily: F.regular, textAlign: 'right', lineHeight: 24 },
+  survivedBtn:   { backgroundColor: C.green, borderRadius: 12, padding: 18, alignItems: 'center', marginBottom: 10 },
+  survivedBtnText: { color: '#fff', fontSize: 16, fontFamily: F.black, letterSpacing: 1 },
 })

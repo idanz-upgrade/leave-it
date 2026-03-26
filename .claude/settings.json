@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/idanzyl/**)",
+      "Read(//private/tmp/**)",
+      "Bash(find /private/tmp/claude-501 -name *.png -o -name *.jpg -o -name *.webp)",
+      "Bash(open /Users/idanzyl/Desktop/leave-it/assets/avatar/)",
+      "Bash(curl -s --connect-timeout 3 https://exp.host)",
+      "Bash(echo \"exit: $?\")"
+    ]
+  }
+}

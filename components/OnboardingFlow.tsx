@@ -134,12 +134,14 @@ function SingleQ({ title, subtitle, opts, onNext }: {
   const [sel, setSel] = useState('')
   return (
     <View style={s.qWrap}>
-      <Text style={s.qTitle}>{title}</Text>
-      {subtitle && <Text style={s.qSub}>{subtitle}</Text>}
-      <View style={s.optList}>
-        {opts.map(o => (
-          <RadioRow key={o.label} {...o} selected={sel === o.label} onPress={() => setSel(o.label)} />
-        ))}
+      <View>
+        <Text style={s.qTitle}>{title}</Text>
+        {subtitle && <Text style={s.qSub}>{subtitle}</Text>}
+        <View style={s.optList}>
+          {opts.map(o => (
+            <RadioRow key={o.label} {...o} selected={sel === o.label} onPress={() => setSel(o.label)} />
+          ))}
+        </View>
       </View>
       <PillBtn label="המשך" onPress={() => onNext(sel)} disabled={!sel} />
     </View>
@@ -159,12 +161,14 @@ function MultiQ({ title, subtitle, opts, min, onNext }: {
   const ready = sel.length >= (min ?? 1)
   return (
     <View style={s.qWrap}>
-      <Text style={s.qTitle}>{title}</Text>
-      {subtitle && <Text style={s.qSub}>{subtitle}</Text>}
-      <View style={s.optList}>
-        {opts.map(o => (
-          <CheckRow key={o.label} {...o} selected={sel.includes(o.label)} onPress={() => toggle(o.label)} />
-        ))}
+      <View>
+        <Text style={s.qTitle}>{title}</Text>
+        {subtitle && <Text style={s.qSub}>{subtitle}</Text>}
+        <View style={s.optList}>
+          {opts.map(o => (
+            <CheckRow key={o.label} {...o} selected={sel.includes(o.label)} onPress={() => toggle(o.label)} />
+          ))}
+        </View>
       </View>
       <PillBtn label="המשך" onPress={() => onNext(sel)} disabled={!ready} />
     </View>
@@ -180,16 +184,18 @@ function BigTwoQ({ title, opts, onNext }: {
   const [sel, setSel] = useState('')
   return (
     <View style={s.qWrap}>
-      <Text style={s.qTitle}>{title}</Text>
-      <View style={[s.optList, { gap: 12 }]}>
-        {opts.map(o => (
-          <TouchableOpacity key={o.value} onPress={() => setSel(o.value)} activeOpacity={0.8}
-            style={[s.bigCard, sel === o.value && s.bigCardSel]}>
-            <Text style={s.bigCardEmoji}>{o.emoji}</Text>
-            <Text style={[s.bigCardLabel, sel === o.value && s.bigCardLabelSel]}>{o.label}</Text>
-            <Text style={s.bigCardSub}>{o.sublabel}</Text>
-          </TouchableOpacity>
-        ))}
+      <View>
+        <Text style={s.qTitle}>{title}</Text>
+        <View style={[s.optList, { gap: 12 }]}>
+          {opts.map(o => (
+            <TouchableOpacity key={o.value} onPress={() => setSel(o.value)} activeOpacity={0.8}
+              style={[s.bigCard, sel === o.value && s.bigCardSel]}>
+              <Text style={s.bigCardEmoji}>{o.emoji}</Text>
+              <Text style={[s.bigCardLabel, sel === o.value && s.bigCardLabelSel]}>{o.label}</Text>
+              <Text style={s.bigCardSub}>{o.sublabel}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
       <PillBtn label="המשך" onPress={() => onNext(sel)} disabled={!sel} />
     </View>
@@ -203,12 +209,14 @@ function DynamicSingleQ({ title, subtitle, options, onNext }: {
   const [sel, setSel] = useState('')
   return (
     <View style={s.qWrap}>
-      <Text style={s.qTitle}>{title}</Text>
-      {subtitle && <Text style={s.qSub}>{subtitle}</Text>}
-      <View style={s.optList}>
-        {options.map(label => (
-          <RadioRow key={label} label={label} selected={sel === label} onPress={() => setSel(label)} />
-        ))}
+      <View>
+        <Text style={s.qTitle}>{title}</Text>
+        {subtitle && <Text style={s.qSub}>{subtitle}</Text>}
+        <View style={s.optList}>
+          {options.map(label => (
+            <RadioRow key={label} label={label} selected={sel === label} onPress={() => setSel(label)} />
+          ))}
+        </View>
       </View>
       <PillBtn label="זה הדבר" onPress={() => onNext(sel)} disabled={!sel} />
     </View>
@@ -846,7 +854,7 @@ const s = StyleSheet.create({
   welcomeIcon: { fontSize: 72, textAlign: 'center', marginBottom: 20 },
 
   // Question screens
-  qWrap:  { flex: 1, paddingTop: 24 },
+  qWrap:  { flex: 1, justifyContent: 'space-between', paddingTop: 24 },
   qTitle: { fontSize: 26, fontFamily: F.black, color: '#ffffff', textAlign: 'right', lineHeight: 34, marginBottom: 6 },
   qSub:   { fontSize: 13, fontFamily: F.regular, color: '#8b8b9e', textAlign: 'right', marginBottom: 20, lineHeight: 20 },
   optList: { gap: 8, marginBottom: 28 },

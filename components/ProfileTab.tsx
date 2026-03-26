@@ -1,13 +1,23 @@
 import React, { useState } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, Modal, TextInput, Alert } from 'react-native'
-import { useStore, LEVEL_REQUIREMENTS } from '@/lib/store'
+import {
+  View, Text, TouchableOpacity, StyleSheet, ScrollView,
+  SafeAreaView, Modal, TextInput, Alert, Image, ImageSourcePropType,
+} from 'react-native'
+import { useStore, LEVEL_REQUIREMENTS, Sport } from '@/lib/store'
 import { C, F } from '@/lib/theme'
 
+const SPORT_IMAGES: Record<Sport, Partial<Record<number, ImageSourcePropType>>> = {
+  football:   { 1: require('../assets/avatar/level01.png') },
+  basketball: {},
+  tennis:     {},
+  running:    {},
+}
+
 const MILESTONES = [
-  { label: '7 ימים',       key: 7,   emoji: '🌱' },
-  { label: '30 ימים',      key: 30,  emoji: '🌿' },
-  { label: '90 ימים',      key: 90,  emoji: '🌳' },
-  { label: '100 משימות',   key: 100, emoji: '⚡', taskBased: true },
+  { label: '7 ימים',     key: 7,   taskBased: false },
+  { label: '30 ימים',    key: 30,  taskBased: false },
+  { label: '90 ימים',    key: 90,  taskBased: false },
+  { label: '100 משימות', key: 100, taskBased: true  },
 ]
 
 function EditWhyModal({ current, onSave, onClose }: { current: string; onSave: (v: string) => void; onClose: () => void }) {
@@ -16,10 +26,8 @@ function EditWhyModal({ current, onSave, onClose }: { current: string; onSave: (
     <Modal visible transparent animationType="slide">
       <TouchableOpacity style={s.modalOverlay} onPress={onClose} activeOpacity={1}>
         <TouchableOpacity activeOpacity={1} style={s.bottomSheet}>
-          <View style={s.sheetHeader}>
-            <TouchableOpacity onPress={onClose}><Text style={{ color: C.dim, fontSize: 20 }}>✕</Text></TouchableOpacity>
-            <Text style={s.sheetTitle}>ההתחייבות שלי</Text>
-          </View>
+          <View style={s.sheetHandle} />
+          <Text style={s.sheetTitle}>ההתחייבות שלי</Text>
           <TextInput
             value={text}
             onChangeText={setText}
@@ -44,116 +52,146 @@ export default function ProfileTab() {
   const [editingWhy, setEditingWhy] = useState(false)
   const [why, setWhy] = useState(onboardingData?.yourWhy || '')
 
-  const req = LEVEL_REQUIREMENTS[Math.min(level - 1, 9)]
+  const req          = LEVEL_REQUIREMENTS[Math.min(level - 1, 9)]
+  const nextReq      = LEVEL_REQUIREMENTS[Math.min(level, 9)]
+  const aura         = req.aura ?? C.orange
+  const sport        = onboardingData?.sport ?? null
+  const image        = SPORT_IMAGES[sport ?? 'football']?.[level]
   const tasksCompleted = tasks.filter(t => t.isCompleted).length
-
-  const getMilestoneProgress = (m: typeof MILESTONES[0]) => {
-    if (m.taskBased) return { current: tasksCompleted, target: m.key }
-    return { current: currentStreak, target: m.key }
-  }
 
   return (
     <SafeAreaView style={s.container}>
-      <View style={s.topBar}>
-        <Text style={s.screenTitle}>פרופיל</Text>
+      {/* Header */}
+      <View style={s.header}>
+        <Text style={s.headerTitle}>פרופיל שחקן</Text>
       </View>
 
-      <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Avatar + level */}
-        <View style={s.profileCard}>
-          <View style={s.profileGlow} />
-          <View style={s.avatar}>
-            <Text style={{ fontSize: 40 }}>{req.emoji}</Text>
+      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+
+        {/* Player card hero */}
+        <View style={s.playerCard}>
+          <View style={[s.cardGlow, { backgroundColor: aura + '18' }]} />
+
+          {/* Level tag */}
+          <View style={[s.lvlTag, { borderColor: aura + '70' }]}>
+            <Text style={[s.lvlTagText, { color: aura }]}>רמה {String(level).padStart(2, '0')}</Text>
           </View>
-          <Text style={s.userName}>לוחם</Text>
-          <View style={s.levelBadge}>
-            <Text style={s.levelBadgeText}>רמה {level} — {req.name}</Text>
-          </View>
+
+          {/* Character */}
+          {image ? (
+            <Image source={image} style={s.charImage} resizeMode="contain" />
+          ) : (
+            <Text style={s.charEmoji}>{req.emoji}</Text>
+          )}
+
+          <Text style={s.charName}>{req.name}</Text>
+          <Text style={s.charNameEn}>{req.nameEn.toUpperCase()}</Text>
         </View>
 
-        {/* Stats row */}
-        <View style={s.statsRow}>
-          <View style={s.statBox}>
-            <Text style={s.statValue}>🔥 {currentStreak}</Text>
-            <Text style={s.statLabel}>Streak נוכחי</Text>
+        {/* Stats HUD */}
+        <View style={s.statsHUD}>
+          <View style={s.statCol}>
+            <Text style={s.statValue}>{currentStreak}</Text>
+            <Text style={s.statLabel}>ימים ברצף</Text>
           </View>
-          <View style={[s.statBox, { borderColor: C.orange }]}>
-            <Text style={s.statValue}>⚡ {xp.toLocaleString()}</Text>
-            <Text style={s.statLabel}>XP</Text>
+          <View style={s.statDivider} />
+          <View style={s.statCol}>
+            <Text style={[s.statValue, { color: C.orange }]}>{xp.toLocaleString()}</Text>
+            <Text style={s.statLabel}>ניקוד</Text>
           </View>
-          <View style={s.statBox}>
-            <Text style={s.statValue}>🏆 {longestStreak}</Text>
+          <View style={s.statDivider} />
+          <View style={s.statCol}>
+            <Text style={s.statValue}>{longestStreak}</Text>
             <Text style={s.statLabel}>שיא אישי</Text>
           </View>
         </View>
 
-        {/* Your Why */}
-        <View style={s.whyCard}>
-          <View style={s.whyHeader}>
+        {/* Next level */}
+        {level < 10 && (
+          <View style={s.block}>
+            <Text style={s.blockLabel}>הרמה הבאה</Text>
+            <View style={s.nextLevelRow}>
+              <Text style={[s.nextLevelName, { color: aura }]}>{nextReq.name} ←</Text>
+              <View style={s.nextLevelStats}>
+                <View style={s.nextStat}>
+                  <Text style={s.nextStatVal}>{nextReq.streak}</Text>
+                  <Text style={s.nextStatLabel}>ימי רצף</Text>
+                </View>
+                <View style={s.nextStat}>
+                  <Text style={[s.nextStatVal, { color: C.orange }]}>{nextReq.xp.toLocaleString()}</Text>
+                  <Text style={s.nextStatLabel}>ניקוד</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Why */}
+        <View style={s.block}>
+          <View style={s.blockHeaderRow}>
             <TouchableOpacity onPress={() => setEditingWhy(true)} activeOpacity={0.7}>
-              <Text style={s.editLink}>✏️ ערוך</Text>
+              <Text style={s.editBtn}>ערוך</Text>
             </TouchableOpacity>
-            <Text style={s.whyTitle}>ההתחייבות שלי</Text>
+            <Text style={s.blockLabel}>ההתחייבות שלי</Text>
           </View>
           {why ? (
             <Text style={s.whyText}>{why}</Text>
           ) : (
             <TouchableOpacity onPress={() => setEditingWhy(true)} activeOpacity={0.7}>
-              <Text style={s.whyEmpty}>+ הוסף את הסיבה שלך לעצירה</Text>
+              <Text style={s.whyEmpty}>+ הוסף את הסיבה שלך</Text>
             </TouchableOpacity>
           )}
         </View>
 
         {/* Milestones */}
-        <View style={s.card}>
-          <Text style={s.cardTitle}>הישגים</Text>
-          <View style={s.milestonesGrid}>
+        <View style={s.block}>
+          <Text style={s.blockLabel}>הישגים</Text>
+          <View style={s.milestonesRow}>
             {MILESTONES.map(m => {
-              const { current, target } = getMilestoneProgress(m)
-              const done = current >= target
+              const current = m.taskBased ? tasksCompleted : currentStreak
+              const done = current >= m.key
               return (
-                <View key={m.label} style={[s.milestoneBox, done && s.milestoneBoxDone]}>
-                  <Text style={{ fontSize: 28, opacity: done ? 1 : 0.3 }}>{m.emoji}</Text>
-                  <Text style={[s.milestoneName, done && { color: C.green }]}>{m.label}</Text>
-                  <Text style={s.milestoneProg}>{Math.min(current, target)}/{target}</Text>
+                <View key={m.label} style={[s.milestone, done && s.milestoneDone]}>
+                  <Text style={[s.milestoneVal, done && { color: C.green }]}>
+                    {Math.min(current, m.key)}/{m.key}
+                  </Text>
+                  <Text style={[s.milestoneLabel, done && { color: C.green }]}>{m.label}</Text>
                 </View>
               )
             })}
           </View>
         </View>
 
-        {/* Language style */}
-        <View style={s.card}>
+        {/* Stats */}
+        <View style={s.block}>
+          <Text style={s.blockLabel}>סטטיסטיקות</Text>
           <View style={s.infoRow}>
-            <Text style={s.infoValue}>{onboardingData?.languageStyle === 'religious' ? '✡️ דתי / מסורתי' : '🧘 חילוני'}</Text>
-            <Text style={s.infoLabel}>סגנון שפה</Text>
+            <Text style={s.infoVal}>{setbacks.length}</Text>
+            <Text style={s.infoKey}>נפילות מתועדות</Text>
           </View>
           <View style={s.infoRow}>
-            <Text style={s.infoValue}>{setbacks.length}</Text>
-            <Text style={s.infoLabel}>נפילות מתועדות</Text>
+            <Text style={s.infoVal}>{checkins.length}</Text>
+            <Text style={s.infoKey}>צ׳ק-אינים</Text>
           </View>
           <View style={[s.infoRow, { borderBottomWidth: 0 }]}>
-            <Text style={s.infoValue}>{checkins.length}</Text>
-            <Text style={s.infoLabel}>צ'ק-אינים</Text>
+            <Text style={s.infoVal}>{onboardingData?.languageStyle === 'religious' ? 'דתי / מסורתי' : 'חילוני'}</Text>
+            <Text style={s.infoKey}>סגנון שפה</Text>
           </View>
         </View>
 
-        {/* Danger zone */}
-        <View style={[s.card, { borderColor: 'rgba(239,68,68,0.2)' }]}>
-          <Text style={[s.cardTitle, { color: C.red }]}>אזור מסוכן</Text>
-          <TouchableOpacity
-            onPress={() => Alert.alert('אתחול', 'פעולה זו תמחק את כל ההתקדמות שלך. האם אתה בטוח?', [
-              { text: 'ביטול', style: 'cancel' },
-              { text: 'אפס הכל', style: 'destructive', onPress: () => {} },
-            ])}
-            style={s.dangerBtn}
-            activeOpacity={0.8}
-          >
-            <Text style={s.dangerBtnText}>איפוס כל ההתקדמות</Text>
-          </TouchableOpacity>
-        </View>
+        {/* Danger */}
+        <TouchableOpacity
+          onPress={() => Alert.alert('אתחול', 'פעולה זו תמחק את כל ההתקדמות שלך. האם אתה בטוח?', [
+            { text: 'ביטול', style: 'cancel' },
+            { text: 'אפס הכל', style: 'destructive', onPress: () => {} },
+          ])}
+          style={s.dangerBtn}
+          activeOpacity={0.8}
+        >
+          <Text style={s.dangerBtnText}>איפוס כל ההתקדמות</Text>
+        </TouchableOpacity>
 
-        <View style={{ height: 30 }} />
+        <View style={{ height: 40 }} />
       </ScrollView>
 
       {editingWhy && (
@@ -165,50 +203,106 @@ export default function ProfileTab() {
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
-  topBar: { paddingHorizontal: 20, paddingVertical: 12 },
-  screenTitle: { fontSize: 22, fontFamily: F.black, color: C.text, textAlign: 'right' },
-  scrollContent: { paddingHorizontal: 16, gap: 12 },
+  scroll:    { paddingBottom: 20 },
 
-  profileCard: { backgroundColor: C.card, borderRadius: 20, borderWidth: 1, borderColor: C.border, padding: 28, alignItems: 'center', overflow: 'hidden', gap: 10 },
-  profileGlow: { position: 'absolute', top: 0, left: 0, right: 0, height: 80, backgroundColor: C.orangeDim },
-  avatar: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#222', borderWidth: 2, borderColor: C.orange, alignItems: 'center', justifyContent: 'center' },
-  userName: { fontSize: 22, fontFamily: F.black, color: C.text },
-  levelBadge: { backgroundColor: C.orangeDim, borderRadius: 99, paddingVertical: 6, paddingHorizontal: 16, borderWidth: 1, borderColor: C.orange },
-  levelBadgeText: { fontSize: 13, fontFamily: F.bold, color: C.orange },
+  header: {
+    paddingHorizontal: 20, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: '#ffffff08',
+  },
+  headerTitle: { fontSize: 11, fontFamily: F.black, color: C.dim, letterSpacing: 2.5, textAlign: 'right' },
 
-  statsRow: { flexDirection: 'row', gap: 10 },
-  statBox: { flex: 1, backgroundColor: C.card, borderRadius: 14, borderWidth: 1, borderColor: C.border, padding: 14, alignItems: 'center', gap: 4 },
-  statValue: { fontSize: 15, fontFamily: F.bold, color: C.text },
-  statLabel: { fontSize: 10, color: C.dim, fontFamily: F.regular },
+  // Player card
+  playerCard: {
+    alignItems: 'center',
+    paddingVertical: 28,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ffffff06',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  cardGlow: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+  },
+  lvlTag: {
+    borderWidth: 1, borderRadius: 4,
+    paddingHorizontal: 10, paddingVertical: 4,
+    backgroundColor: '#ffffff06',
+    marginBottom: 12,
+  },
+  lvlTagText:  { fontSize: 10, fontFamily: F.black, letterSpacing: 1.5 },
+  charImage:   { width: 180, height: 200 },
+  charEmoji:   { fontSize: 90 },
+  charName:    { fontSize: 22, fontFamily: F.black, color: C.text, marginTop: 8 },
+  charNameEn:  { fontSize: 9, color: C.dim, fontFamily: F.black, letterSpacing: 3, marginTop: 4 },
 
-  whyCard: { backgroundColor: C.card, borderRadius: 14, borderWidth: 1, borderColor: C.border, padding: 16 },
-  whyHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  whyTitle: { fontSize: 15, fontFamily: F.bold, color: C.text },
-  editLink: { fontSize: 13, color: C.orange, fontFamily: F.regular },
-  whyText: { fontSize: 15, fontFamily: F.regular, color: C.muted, textAlign: 'right', lineHeight: 22 },
+  // Stats HUD
+  statsHUD: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 24, paddingVertical: 16,
+    borderBottomWidth: 1, borderBottomColor: '#ffffff06',
+  },
+  statCol:     { flex: 1, alignItems: 'center' },
+  statValue:   { fontSize: 20, fontFamily: F.black, color: C.text },
+  statLabel:   { fontSize: 9, fontFamily: F.bold, color: C.dim, letterSpacing: 1.5, marginTop: 2 },
+  statDivider: { width: 1, height: 32, backgroundColor: '#1e1e1e' },
+
+  // Blocks
+  block: {
+    marginHorizontal: 16, marginTop: 12,
+    backgroundColor: C.card,
+    borderRadius: 14,
+    borderWidth: 1, borderColor: '#ffffff06',
+    padding: 16,
+  },
+  blockLabel:    { fontSize: 9, fontFamily: F.black, color: C.dim, letterSpacing: 2.5, textAlign: 'right', marginBottom: 12 },
+  blockHeaderRow:{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  editBtn:       { fontSize: 12, color: C.orange, fontFamily: F.bold },
+
+  // Next level
+  nextLevelRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  nextLevelName:  { fontSize: 15, fontFamily: F.black },
+  nextLevelStats: { flexDirection: 'row', gap: 16 },
+  nextStat:       { alignItems: 'center' },
+  nextStatVal:    { fontSize: 14, fontFamily: F.black, color: C.text },
+  nextStatLabel:  { fontSize: 9, color: C.dim, fontFamily: F.bold, letterSpacing: 1, marginTop: 2 },
+
+  // Why
+  whyText:  { fontSize: 15, fontFamily: F.regular, color: C.muted, textAlign: 'right', lineHeight: 22 },
   whyEmpty: { fontSize: 14, color: C.dim, textAlign: 'right', fontFamily: F.regular },
 
-  card: { backgroundColor: C.card, borderRadius: 14, borderWidth: 1, borderColor: C.border, padding: 16 },
-  cardTitle: { fontSize: 13, fontFamily: F.bold, color: C.muted, letterSpacing: 1, textAlign: 'right', marginBottom: 14 },
+  // Milestones
+  milestonesRow: { flexDirection: 'row', gap: 8 },
+  milestone: {
+    flex: 1, borderRadius: 10, borderWidth: 1, borderColor: '#2a2a2a',
+    padding: 12, alignItems: 'center', gap: 4,
+  },
+  milestoneDone: { borderColor: C.green + '50', backgroundColor: C.green + '0a' },
+  milestoneVal:  { fontSize: 13, fontFamily: F.black, color: C.dim },
+  milestoneLabel:{ fontSize: 9, fontFamily: F.bold, color: C.dim, textAlign: 'center' },
 
-  milestonesGrid: { flexDirection: 'row', gap: 10 },
-  milestoneBox: { flex: 1, borderRadius: 12, borderWidth: 1, borderColor: C.border, padding: 14, alignItems: 'center', gap: 4 },
-  milestoneBoxDone: { borderColor: C.green, backgroundColor: 'rgba(34,197,94,0.08)' },
-  milestoneName: { fontSize: 11, fontFamily: F.bold, color: C.dim, textAlign: 'center' },
-  milestoneProg: { fontSize: 10, color: '#333', fontFamily: F.regular },
+  // Info rows
+  infoRow:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: '#1a1a1a' },
+  infoKey:  { fontSize: 13, color: C.muted, fontFamily: F.regular },
+  infoVal:  { fontSize: 13, fontFamily: F.bold, color: C.text },
 
-  infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#222' },
-  infoLabel: { fontSize: 14, color: C.muted, fontFamily: F.regular },
-  infoValue: { fontSize: 14, fontFamily: F.bold, color: C.text },
+  // Danger
+  dangerBtn: {
+    marginHorizontal: 16, marginTop: 12,
+    borderWidth: 1, borderColor: C.red + '40',
+    borderRadius: 12, padding: 16, alignItems: 'center',
+  },
+  dangerBtnText: { color: C.red, fontSize: 13, fontFamily: F.bold, letterSpacing: 0.5 },
 
-  dangerBtn: { borderWidth: 1, borderColor: C.red, borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 4 },
-  dangerBtnText: { color: C.red, fontSize: 14, fontFamily: F.bold },
-
+  // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
-  bottomSheet: { backgroundColor: C.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40 },
-  sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  sheetTitle: { fontSize: 18, fontFamily: F.bold, color: C.text },
-  textArea: { backgroundColor: '#111', borderWidth: 1.5, borderColor: '#333', borderRadius: 12, padding: 16, color: C.text, fontSize: 15, fontFamily: F.regular, minHeight: 120, marginBottom: 16 },
-  saveBtn: { backgroundColor: C.orange, borderRadius: 12, padding: 16, alignItems: 'center' },
-  saveBtnText: { color: '#fff', fontSize: 16, fontFamily: F.bold },
+  bottomSheet:  { backgroundColor: '#141414', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 44 },
+  sheetHandle:  { width: 36, height: 4, backgroundColor: '#2a2a2a', borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
+  sheetTitle:   { fontSize: 16, fontFamily: F.bold, color: C.text, textAlign: 'right', marginBottom: 16 },
+  textArea: {
+    backgroundColor: '#0d0d0d', borderWidth: 1.5, borderColor: '#2a2a2a',
+    borderRadius: 10, padding: 14, color: C.text, fontSize: 15,
+    fontFamily: F.regular, minHeight: 120, marginBottom: 16,
+  },
+  saveBtn:     { backgroundColor: C.orange, borderRadius: 10, padding: 14, alignItems: 'center' },
+  saveBtnText: { color: '#fff', fontSize: 15, fontFamily: F.bold },
 })
