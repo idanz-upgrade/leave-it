@@ -4,7 +4,7 @@ import {
   ScrollView, KeyboardAvoidingView, Platform, SafeAreaView, Animated,
 } from 'react-native'
 import { router } from 'expo-router'
-import { useStore, OnboardingData } from '@/lib/store'
+import { useStore, OnboardingData, Sport } from '@/lib/store'
 import { C, F } from '@/lib/theme'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -20,6 +20,7 @@ type Answers = {
   goals: string[]
   primaryGoal: string
   motivationType: string
+  sport: Sport | null
   name: string
   yourWhy: string
   selectedMorningTasks: string[]
@@ -31,7 +32,7 @@ type Answers = {
 const INIT: Answers = {
   symptoms: [], habitDuration: '', frequency: '', triedBefore: '',
   triggers: [], dangerPlaces: [], dangerTime: '', costs: [], goals: [],
-  primaryGoal: '', motivationType: '', name: '', yourWhy: '',
+  primaryGoal: '', motivationType: '', sport: null, name: '', yourWhy: '',
   selectedMorningTasks: [], selectedAnytimeTasks: [], selectedEveningTasks: [],
   languageStyle: 'secular',
 }
@@ -202,6 +203,70 @@ function BigTwoQ({ title, opts, onNext }: {
   )
 }
 
+// ── Q: Sport selection (4-card grid) ─────────────────────────────────────────
+function SportQ({ onNext }: { onNext: (v: Sport) => void }) {
+  const [sel, setSel] = useState<Sport | null>(null)
+  const SPORTS: { value: Sport; label: string; emoji: string }[] = [
+    { value: 'football',   label: 'כדורגל',   emoji: '⚽' },
+    { value: 'basketball', label: 'כדורסל',   emoji: '🏀' },
+    { value: 'tennis',     label: 'טניס',     emoji: '🎾' },
+    { value: 'running',    label: 'ריצה',      emoji: '🏃' },
+  ]
+  return (
+    <View style={s.qWrap}>
+      <View>
+        <Text style={s.qTitle}>איזה ספורט{'\n'}קרוב לליבך?</Text>
+        <Text style={s.qSub}>הדמות שלך תיבנה בהתאם.</Text>
+        <View style={s.sportGrid}>
+          {SPORTS.map(sp => (
+            <TouchableOpacity
+              key={sp.value}
+              onPress={() => setSel(sp.value)}
+              activeOpacity={0.8}
+              style={[s.sportCard, sel === sp.value && s.sportCardSel]}
+            >
+              <Text style={s.sportEmoji}>{sp.emoji}</Text>
+              <Text style={[s.sportLabel, sel === sp.value && s.sportLabelSel]}>{sp.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+      <PillBtn label="המשך" onPress={() => sel && onNext(sel)} disabled={!sel} />
+    </View>
+  )
+}
+
+// ── Q: Language style ─────────────────────────────────────────────────────────
+function LanguageStyleQ({ onNext }: { onNext: (v: 'secular' | 'religious') => void }) {
+  const [sel, setSel] = useState<'secular' | 'religious' | null>(null)
+  return (
+    <View style={s.qWrap}>
+      <View>
+        <Text style={s.qTitle}>מה הרקע{'\n'}שלך?</Text>
+        <Text style={s.qSub}>זה יעזור לנו לדבר בשפה שלך.</Text>
+        <View style={[s.optList, { gap: 12 }]}>
+          {([
+            { value: 'secular'  as const, label: 'חילוני / מסורתי קל', emoji: '💪', sub: 'שפה ישירה ועכשווית' },
+            { value: 'religious' as const, label: 'דתי / מסורתי',       emoji: '✡️', sub: 'שמירת הברית, קדושה' },
+          ] as const).map(o => (
+            <TouchableOpacity
+              key={o.value}
+              onPress={() => setSel(o.value)}
+              activeOpacity={0.8}
+              style={[s.bigCard, sel === o.value && s.bigCardSel]}
+            >
+              <Text style={s.bigCardEmoji}>{o.emoji}</Text>
+              <Text style={[s.bigCardLabel, sel === o.value && s.bigCardLabelSel]}>{o.label}</Text>
+              <Text style={s.bigCardSub}>{o.sub}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+      <PillBtn label="המשך" onPress={() => sel && onNext(sel)} disabled={!sel} />
+    </View>
+  )
+}
+
 // ── Q: Dynamic single (options come from previous answers) ────────────────────
 function DynamicSingleQ({ title, subtitle, options, onNext }: {
   title: string; subtitle?: string; options: string[]; onNext: (v: string) => void
@@ -352,32 +417,74 @@ function EduStats({ onNext }: { onNext: () => void }) {
 }
 
 // ── Task selection screen ─────────────────────────────────────────────────────
-function TaskSelect({ category, title, emoji, subtitle, tasks, min, max, onNext }: {
+function TaskSelect({ category, title, emoji, subtitle, tasks, min, max, recommended, onNext }: {
   category: string; title: string; emoji: string; subtitle: string
-  tasks: string[]; min: number; max: number
+  tasks: string[]; min: number; max: number; recommended?: string[]
   onNext: (sel: string[]) => void
 }) {
-  const [sel, setSel] = useState<string[]>([])
+  const [sel, setSel] = useState<string[]>(() => {
+    if (!recommended) return []
+    return recommended.filter(r => tasks.includes(r)).slice(0, max)
+  })
+  const [customTasks, setCustomTasks] = useState<string[]>([])
+  const [customInput, setCustomInput]  = useState('')
+
+  const allTasks = [...tasks, ...customTasks]
+
   const toggle = (v: string) => {
     if (sel.includes(v)) { setSel(p => p.filter(x => x !== v)); return }
     if (sel.length < max) setSel(p => [...p, v])
   }
+
+  const addCustom = () => {
+    const t = customInput.trim()
+    if (!t || allTasks.includes(t)) return
+    setCustomTasks(p => [...p, t])
+    if (sel.length < max) setSel(p => [...p, t])
+    setCustomInput('')
+  }
+
   const ready = sel.length >= min
+
   return (
     <View style={s.qWrap}>
-      <View style={s.taskHeader}>
-        <Text style={s.taskEmoji}>{emoji}</Text>
-        <Text style={s.taskTitle}>{title}</Text>
-        <Text style={s.taskSub}>{subtitle}</Text>
-        <View style={s.taskPick}>
-          <Text style={s.taskPickText}>בחר {min}–{max}</Text>
+      {/* Wrap header + list together — fixes space-between layout bug */}
+      <View>
+        <View style={s.taskHeader}>
+          <Text style={s.taskEmoji}>{emoji}</Text>
+          <Text style={s.taskTitle}>{title}</Text>
+          <Text style={s.taskSub}>{subtitle}</Text>
+          <View style={s.taskPick}>
+            <Text style={s.taskPickText}>בחר {min}–{max}</Text>
+          </View>
+          <Text style={s.taskCount}>{sel.length} נבחרו</Text>
         </View>
-        <Text style={s.taskCount}>{sel.length} נבחרו</Text>
-      </View>
-      <View style={s.optList}>
-        {tasks.map(t => (
-          <CheckRow key={t} label={t} selected={sel.includes(t)} onPress={() => toggle(t)} />
-        ))}
+        <View style={s.optList}>
+          {allTasks.map(t => (
+            <View key={t}>
+              <CheckRow label={t} selected={sel.includes(t)} onPress={() => toggle(t)} />
+              {recommended?.includes(t) && !sel.includes(t) && (
+                <Text style={s.recBadge}>מומלץ עבורך ★</Text>
+              )}
+            </View>
+          ))}
+          {/* Custom task row */}
+          <View style={s.customRow}>
+            <TouchableOpacity onPress={addCustom} style={s.customAddBtn} activeOpacity={0.8}>
+              <Text style={s.customAddText}>+</Text>
+            </TouchableOpacity>
+            <TextInput
+              value={customInput}
+              onChangeText={setCustomInput}
+              placeholder="הוסף משימה מותאמת..."
+              placeholderTextColor="#3e3e52"
+              style={s.customInput}
+              textAlign="right"
+              returnKeyType="done"
+              onSubmitEditing={addCustom}
+            />
+          </View>
+        </View>
       </View>
       <PillBtn label={category === 'evening' ? 'נעל משימות' : 'הבא'} onPress={() => onNext(sel)} disabled={!ready} />
     </View>
@@ -387,11 +494,11 @@ function TaskSelect({ category, title, emoji, subtitle, tasks, min, max, onNext 
 // ── Plan Ready (summary) ──────────────────────────────────────────────────────
 function PlanReady({ answers, onNext }: { answers: Answers; onNext: () => void }) {
   const rows = [
-    { icon: '⚠️', label: 'זמן סיכון',    value: answers.dangerTime || 'ערב' },
+    { icon: '⚠️', label: 'שעת סיכון',    value: answers.dangerTime || 'ערב' },
+    { icon: '📍', label: 'מקומות סיכון',  value: answers.dangerPlaces.slice(0, 2).join(', ') || 'לא צוין' },
+    { icon: '⚡', label: 'טריגרים',       value: answers.triggers.slice(0, 2).join(', ') || 'לא צוין' },
     { icon: '🎯', label: 'מטרה ראשית',   value: answers.primaryGoal || answers.goals[0] || 'מיקוד' },
     { icon: '✅', label: 'משימות יומיות', value: `${(answers.selectedMorningTasks.length + answers.selectedAnytimeTasks.length + answers.selectedEveningTasks.length)} נבחרו` },
-    { icon: '🤖', label: 'תמיכת AI',     value: 'פעיל 24/7' },
-    { icon: '👥', label: 'קהילה',        value: 'מוכן' },
   ]
   return (
     <View style={s.hookWrap}>
@@ -413,20 +520,21 @@ function PlanReady({ answers, onNext }: { answers: Answers; onNext: () => void }
 }
 
 // ── Welcome end screen ────────────────────────────────────────────────────────
-function WelcomeEnd({ name, onDone }: { name: string; onDone: () => void }) {
+function WelcomeEnd({ name, languageStyle, onDone }: { name: string; languageStyle: 'secular' | 'religious'; onDone: () => void }) {
   const scale = useRef(new Animated.Value(0.85)).current
   useEffect(() => {
     Animated.spring(scale, { toValue: 1, friction: 5, useNativeDriver: true }).start()
   }, [])
+  const isReligious = languageStyle === 'religious'
   return (
     <View style={s.hookWrap}>
       <View style={s.hookCenter}>
-        <Animated.Text style={[s.welcomeIcon, { transform: [{ scale }] }]}>⛺</Animated.Text>
+        <Animated.Text style={[s.welcomeIcon, { transform: [{ scale }] }]}>{isReligious ? '✡️' : '⛺'}</Animated.Text>
         <Text style={s.hookTitle}>ברוך הבא,{'\n'}{name || 'גיבור'}.</Text>
-        <Text style={s.hookGreen}>הבסיס שלך מחכה.</Text>
+        <Text style={s.hookGreen}>{isReligious ? 'הכח לשמור על הקדושה מחכה בך.' : 'הבסיס שלך מחכה.'}</Text>
         <Text style={s.hookSub}>יום 1</Text>
       </View>
-      <PillBtn label="בואו נבנה" onPress={onDone} />
+      <PillBtn label={isReligious ? 'בואו נתחזק' : 'בואו נבנה'} onPress={onDone} />
     </View>
   )
 }
@@ -447,6 +555,7 @@ export default function OnboardingFlow() {
   const finish = (finalAnswers: Answers) => {
     const data: OnboardingData = {
       name:                 finalAnswers.name,
+      sport:                finalAnswers.sport,
       symptoms:             finalAnswers.symptoms,
       habitDuration:        finalAnswers.habitDuration,
       frequency:            finalAnswers.frequency,
@@ -465,7 +574,7 @@ export default function OnboardingFlow() {
       selectedEveningTasks:  finalAnswers.selectedEveningTasks,
     }
     completeOnboarding(data)
-    router.replace('/(tabs)')
+    router.replace('/paywall')
   }
 
   const renderStep = () => {
@@ -639,8 +748,14 @@ export default function OnboardingFlow() {
           />
         )
 
-      // ── Phase 3: Education ──────────────────────────────────────────────────
+      // ── Phase 2.5: Identity ─────────────────────────────────────────────────
       case 13:
+        return <SportQ onNext={v => next({ sport: v })} />
+      case 14:
+        return <LanguageStyleQ onNext={v => next({ languageStyle: v })} />
+
+      // ── Phase 3: Education ──────────────────────────────────────────────────
+      case 15:
         return (
           <HookScreen
             title={'זו לא בעיה\nשל כוח רצון.'}
@@ -649,9 +764,9 @@ export default function OnboardingFlow() {
             onPress={() => next()}
           />
         )
-      case 14:
+      case 16:
         return <EduDopamine onNext={() => next()} />
-      case 15:
+      case 17:
         return (
           <HookScreen
             title={'כל פעם,\nהנפילה עמוקה יותר.'}
@@ -660,9 +775,9 @@ export default function OnboardingFlow() {
             onPress={() => next()}
           />
         )
-      case 16:
+      case 18:
         return <EduHeal onNext={() => next()} />
-      case 17:
+      case 19:
         return (
           <HookScreen
             title={'ההחלמה היא\nלא להתנגד.'}
@@ -671,7 +786,7 @@ export default function OnboardingFlow() {
             onPress={() => next()}
           />
         )
-      case 18:
+      case 20:
         return (
           <HookScreen
             title={'ניסית בעבר.'}
@@ -681,7 +796,7 @@ export default function OnboardingFlow() {
             onPress={() => next()}
           />
         )
-      case 19:
+      case 21:
         return (
           <HookScreen
             title={'החלף.\nבנה מחדש.'}
@@ -690,9 +805,9 @@ export default function OnboardingFlow() {
             onPress={() => next()}
           />
         )
-      case 20:
+      case 22:
         return <EduStats onNext={() => next()} />
-      case 21:
+      case 23:
         return (
           <HookScreen
             title={'זו לא עוד\nאפליקציה\nשתמחק.'}
@@ -701,7 +816,7 @@ export default function OnboardingFlow() {
             onPress={() => next()}
           />
         )
-      case 22:
+      case 24:
         return (
           <HookScreen
             title={'אתה מוכן\nלעשות את\nהעבודה?'}
@@ -712,13 +827,13 @@ export default function OnboardingFlow() {
         )
 
       // ── Phase 4: Commitment ─────────────────────────────────────────────────
-      case 23:
+      case 25:
         return <NameEntry onNext={v => next({ name: v })} />
-      case 24:
+      case 26:
         return <WhyEntry onNext={v => next({ yourWhy: v })} />
 
       // ── Phase 5: Tasks ──────────────────────────────────────────────────────
-      case 25:
+      case 27:
         return (
           <HookScreen
             title={'המשימות\nהיומיות שלך.'}
@@ -728,7 +843,11 @@ export default function OnboardingFlow() {
             onPress={() => next()}
           />
         )
-      case 26:
+      case 28: {
+        const morningRec = [
+          ...(answers.dangerTime === 'בוקר' ? ['אין טלפון 30 דקות ראשונות'] : []),
+          ...(answers.triggers.includes('לחץ') ? ['מקלחת קרה', 'אימון בוקר'] : ['מקלחת קרה']),
+        ]
         return (
           <TaskSelect
             category="morning"
@@ -743,10 +862,17 @@ export default function OnboardingFlow() {
               'הליכה בבוקר',
             ]}
             min={1} max={3}
+            recommended={morningRec}
             onNext={v => next({ selectedMorningTasks: v })}
           />
         )
-      case 27:
+      }
+      case 29: {
+        const anytimeRec = [
+          ...(answers.triggers.includes('שעמום') ? ['סשן עבודה ממוקדת', 'קריאת 20 עמודים'] : []),
+          ...(answers.dangerPlaces.includes('ליד המחשב') ? ['ללא רשתות חברתיות (2 שעות)'] : []),
+          ...(answers.goals.includes('מוטיבציה') ? ['אימון'] : []),
+        ]
         return (
           <TaskSelect
             category="anytime"
@@ -761,10 +887,17 @@ export default function OnboardingFlow() {
               'ללא רשתות חברתיות (2 שעות)',
             ]}
             min={2} max={4}
+            recommended={anytimeRec}
             onNext={v => next({ selectedAnytimeTasks: v })}
           />
         )
-      case 28:
+      }
+      case 30: {
+        const eveningRec = [
+          ...(answers.dangerTime === 'לילה מאוחר' || answers.triggers.includes('מאוחר בלילה') || answers.dangerTime === 'ערב'
+            ? ['טלפון הצידה ב-22:00'] : []),
+          ...(answers.dangerTime === 'לילה מאוחר' ? ['קריאה לפני שינה'] : []),
+        ]
         return (
           <TaskSelect
             category="evening"
@@ -779,14 +912,16 @@ export default function OnboardingFlow() {
               'תכנון למחר',
             ]}
             min={1} max={3}
+            recommended={eveningRec}
             onNext={v => next({ selectedEveningTasks: v })}
           />
         )
+      }
 
       // ── Phase 6: End ────────────────────────────────────────────────────────
-      case 29:
+      case 31:
         return <PlanReady answers={answers} onNext={() => next()} />
-      case 30:
+      case 32:
         return (
           <HookScreen
             title={'התחל היום.\nלא מחר.'}
@@ -796,15 +931,15 @@ export default function OnboardingFlow() {
             onPress={() => next()}
           />
         )
-      case 31:
-        return <WelcomeEnd name={answers.name} onDone={() => finish(answers)} />
+      case 33:
+        return <WelcomeEnd name={answers.name} languageStyle={answers.languageStyle} onDone={() => finish(answers)} />
 
       default:
-        return <WelcomeEnd name={answers.name} onDone={() => finish(answers)} />
+        return <WelcomeEnd name={answers.name} languageStyle={answers.languageStyle} onDone={() => finish(answers)} />
     }
   }
 
-  const showBack = step > 0 && step < 31
+  const showBack = step > 0 && step < 33
   const showProgress = step >= Q_START && step <= Q_END
 
   return (
@@ -954,6 +1089,20 @@ const s = StyleSheet.create({
   taskPickText: { fontSize: 12, fontFamily: F.regular, color: C.orange },
   taskCount:  { fontSize: 11, color: '#8b8b9e', fontFamily: F.regular, marginTop: 6 },
 
+  // Sport grid
+  sportGrid:    { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 8, marginBottom: 28 },
+  sportCard: {
+    width: '47%', padding: 20, borderRadius: 16, borderWidth: 1.5,
+    borderColor: '#1e1e2e', backgroundColor: '#12121f', alignItems: 'center', gap: 8,
+  },
+  sportCardSel:  { borderColor: C.orange, backgroundColor: C.orangeDim ?? '#1f150a' },
+  sportEmoji:    { fontSize: 36 },
+  sportLabel:    { fontSize: 16, fontFamily: F.bold, color: '#e2e2e8' },
+  sportLabelSel: { color: C.orange },
+
+  // Recommended badge
+  recBadge: { fontSize: 10, color: C.orange, fontFamily: F.bold, textAlign: 'right', marginTop: -4, marginBottom: 4, paddingRight: 6 },
+
   // Plan ready
   planCard: {
     backgroundColor: '#12121f', borderRadius: 18, overflow: 'hidden',
@@ -967,4 +1116,17 @@ const s = StyleSheet.create({
   planLabel: { fontSize: 14, fontFamily: F.regular, color: '#8b8b9e', textAlign: 'right' },
   planValue: { fontSize: 14, fontFamily: F.bold, color: '#ffffff' },
   planBuilt: { fontSize: 12, fontFamily: F.regular, color: '#8b8b9e', textAlign: 'center', marginTop: 12 },
+
+  // Custom task input
+  customRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8 },
+  customInput: {
+    flex: 1, backgroundColor: '#12121f', borderWidth: 1, borderColor: '#1e1e2e',
+    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10,
+    color: '#ffffff', fontSize: 15, fontFamily: F.regular, textAlign: 'right',
+  },
+  customAddBtn: {
+    width: 42, height: 42, borderRadius: 12, backgroundColor: C.orange,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  customAddText: { fontSize: 24, color: '#fff', lineHeight: 28 },
 })

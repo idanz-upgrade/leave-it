@@ -28,6 +28,15 @@ export interface Setback {
   createdAt: string
 }
 
+export interface TriggerEntry {
+  id: string
+  date: string
+  hadUrge: boolean
+  trigger?: string
+  resisted?: boolean
+  note?: string
+}
+
 export type Sport = 'football' | 'basketball' | 'tennis' | 'running'
 
 export interface OnboardingData {
@@ -161,6 +170,7 @@ interface State {
   userName: string
   currentStreak: number
   longestStreak: number
+  totalCleanDays: number
   xp: number
   level: number
   totalXP: number
@@ -170,8 +180,11 @@ interface State {
   streakStartDate: string | null
   tasks: Task[]
   lastTaskDate: string | null
+  lastCompletedDate: string | null
   checkins: CheckIn[]
   setbacks: Setback[]
+  triggerJournal: TriggerEntry[]
+  isPro: boolean
   panicButtonUsedToday: number
 }
 
@@ -183,7 +196,11 @@ interface Actions {
   addCheckin: (checkin: Omit<CheckIn, 'id' | 'createdAt'>) => void
   reportSetback: (trigger: string, notes: string) => void
   usePanicButton: () => void
-  resetDailyTasks: () => void
+  addTriggerEntry: (data: Omit<TriggerEntry, 'id' | 'date'>) => void
+  setPro: (value: boolean) => void
+  startNewDay: () => void
+  completeDay: () => void
+  resetAll: () => void
 }
 
 export const useStore = create<State & Actions>()(
@@ -194,6 +211,7 @@ export const useStore = create<State & Actions>()(
       userName: '',
       currentStreak: 0,
       longestStreak: 0,
+      totalCleanDays: 0,
       xp: 0,
       level: 1,
       totalXP: 0,
@@ -203,8 +221,11 @@ export const useStore = create<State & Actions>()(
       streakStartDate: null,
       tasks: buildTodayTasks(),
       lastTaskDate: getTodayString(),
+      lastCompletedDate: null,
       checkins: [],
       setbacks: [],
+      triggerJournal: [],
+      isPro: false,
       panicButtonUsedToday: 0,
 
       completeOnboarding: (data) => set({
@@ -220,7 +241,10 @@ export const useStore = create<State & Actions>()(
         const state = get()
         const today = getTodayString()
         if (state.lastTaskDate !== today) {
-          set({ tasks: buildTodayTasks(), lastTaskDate: today, panicButtonUsedToday: 0 })
+          const freshTasks = state.onboardingData
+            ? buildTasksFromOnboarding(state.onboardingData)
+            : buildTodayTasks()
+          set({ tasks: freshTasks, lastTaskDate: today, panicButtonUsedToday: 0 })
           return
         }
         const tasks = state.tasks.map(t =>
@@ -264,9 +288,11 @@ export const useStore = create<State & Actions>()(
 
       reportSetback: (trigger, notes) => set(s => ({
         setbacks: [{ id: generateId(), trigger, notes, createdAt: new Date().toISOString() }, ...s.setbacks],
+        totalCleanDays: s.totalCleanDays + s.currentStreak,
         currentStreak: 0,
         streakStartDate: getTodayString(),
         lastSlipupDate: getTodayString(),
+        lastCompletedDate: null,
       })),
 
       usePanicButton: () => set(s => {
@@ -280,16 +306,58 @@ export const useStore = create<State & Actions>()(
         }
       }),
 
-      resetDailyTasks: () => set(s => {
+      setPro: (value) => set({ isPro: value }),
+
+      addTriggerEntry: (data) => set(s => ({
+        triggerJournal: [
+          { ...data, id: generateId(), date: getTodayString() },
+          ...s.triggerJournal,
+        ],
+      })),
+
+      startNewDay: () => set(s => {
+        const today = getTodayString()
+        if (s.lastTaskDate === today) return {}
+        const freshTasks = s.onboardingData
+          ? buildTasksFromOnboarding(s.onboardingData)
+          : buildTodayTasks()
+        return { tasks: freshTasks, lastTaskDate: today, panicButtonUsedToday: 0 }
+      }),
+
+      completeDay: () => set(s => {
+        const today = getTodayString()
+        if (s.lastCompletedDate === today) return {}  // already completed today
         const newStreak = s.currentStreak + 1
         return {
-          tasks: buildTodayTasks(),
-          lastTaskDate: getTodayString(),
+          lastCompletedDate: today,
           currentStreak: newStreak,
           longestStreak: Math.max(s.longestStreak, newStreak),
-          panicButtonUsedToday: 0,
           level: calculateLevel(newStreak, s.xp),
         }
+      }),
+
+      resetAll: () => set({
+        onboardingCompleted: false,
+        onboardingData: null,
+        userName: '',
+        currentStreak: 0,
+        longestStreak: 0,
+        totalCleanDays: 0,
+        xp: 0,
+        level: 1,
+        totalXP: 0,
+        resilience: 0,
+        lastCheckinDate: null,
+        lastSlipupDate: null,
+        streakStartDate: null,
+        tasks: buildTodayTasks(),
+        lastTaskDate: getTodayString(),
+        lastCompletedDate: null,
+        checkins: [],
+        setbacks: [],
+        triggerJournal: [],
+        isPro: false,
+        panicButtonUsedToday: 0,
       }),
     }),
     {

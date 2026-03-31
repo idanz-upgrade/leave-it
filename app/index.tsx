@@ -4,11 +4,10 @@ import { router } from 'expo-router'
 import { useStore } from '@/lib/store'
 
 export default function Index() {
-  const { onboardingCompleted, lastTaskDate, resetDailyTasks } = useStore()
+  const { onboardingCompleted, startNewDay } = useStore()
 
   useEffect(() => {
-    const today = new Date().toISOString().split('T')[0]
-    if (lastTaskDate && lastTaskDate !== today) resetDailyTasks()
+    startNewDay()
     if (onboardingCompleted) {
       router.replace('/(tabs)')
     } else {

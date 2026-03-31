@@ -3,8 +3,24 @@ import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
   Modal, TextInput, SafeAreaView, Animated, Image, ImageSourcePropType,
 } from 'react-native'
-import { useStore, Task, LEVEL_REQUIREMENTS, Sport } from '@/lib/store'
+import { useStore, Task, TriggerEntry, LEVEL_REQUIREMENTS, Sport, Setback } from '@/lib/store'
 import { C, F } from '@/lib/theme'
+import VictoryModal from '@/components/VictoryModal'
+import TriggerJournalModal from '@/components/TriggerJournalModal'
+
+function computeNextLevel(streak: number, xp: number): number {
+  let level = 1
+  for (let i = LEVEL_REQUIREMENTS.length - 1; i >= 1; i--) {
+    if (streak >= LEVEL_REQUIREMENTS[i].streak && xp >= LEVEL_REQUIREMENTS[i].xp) {
+      level = i + 1; break
+    }
+  }
+  return level
+}
+
+function getTodayString() {
+  return new Date().toISOString().split('T')[0]
+}
 
 // ── Avatar images per sport per level ──────────────────────────────────────
 const SPORT_IMAGES: Record<Sport, Partial<Record<number, ImageSourcePropType>>> = {
@@ -18,6 +34,78 @@ const SPORT_IMAGES: Record<Sport, Partial<Record<number, ImageSourcePropType>>> 
 
 function getAvatarImage(sport: Sport | null, level: number): ImageSourcePropType | undefined {
   return SPORT_IMAGES[sport ?? 'football']?.[level]
+}
+
+// ── Greeting Header ──────────────────────────────────────────────────────────
+function GreetingHeader({ name, streak }: { name: string; streak: number }) {
+  const hour = new Date().getHours()
+  const timeGreet = hour >= 5 && hour < 12 ? 'בוקר טוב' : hour < 17 ? 'צהריים טובים' : 'ערב טוב'
+
+  let text: string
+  if (streak === 0) {
+    text = `${timeGreet}, ${name || 'גיבור'} 💪`
+  } else if (streak === 1) {
+    text = `היום מתחיל המסע שלך, ${name || 'גיבור'}`
+  } else {
+    text = `יום ${streak} ברצף — תמשיך ככה 🔥`
+  }
+
+  return (
+    <View style={s.greetingWrap}>
+      <Text style={s.greetingText}>{text}</Text>
+    </View>
+  )
+}
+
+// ── Week History ─────────────────────────────────────────────────────────────
+const DAY_LABELS = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳']
+
+function WeekHistory({ streakStartDate, lastCompletedDate, setbacks }: {
+  streakStartDate: string | null
+  lastCompletedDate: string | null
+  setbacks: Setback[]
+}) {
+  const today = getTodayString()
+
+  // Build current week Sun→Sat (i=0 is Sunday=א׳, i=6 is Saturday=ש׳)
+  const todayDate = new Date()
+  const sundayOffset = todayDate.getDay() // 0=Sun … 6=Sat
+
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(todayDate)
+    d.setDate(todayDate.getDate() - sundayOffset + i)
+    const dateStr = d.toISOString().split('T')[0]
+    const isToday = dateStr === today
+    const hasSetback = setbacks.some(sb => sb.createdAt.startsWith(dateStr))
+    const isClean = !hasSetback
+      && !!streakStartDate
+      && dateStr >= streakStartDate
+      && (dateStr < today || (isToday && lastCompletedDate === today))
+    return { dateStr, label: DAY_LABELS[i], isToday, hasSetback, isClean }
+  }).reverse()
+
+  return (
+    <View style={s.weekRow}>
+      {days.map(day => (
+        <View key={day.dateStr} style={s.weekDayCol}>
+          <View style={[
+            s.weekCircle,
+            day.isClean    && s.weekCircleGreen,
+            day.hasSetback && s.weekCircleRed,
+            day.isToday    && s.weekCircleToday,
+          ]}>
+            {day.hasSetback
+              ? <Text style={s.weekX}>✕</Text>
+              : day.isClean
+                ? <Text style={s.weekCheck}>✓</Text>
+                : null
+            }
+          </View>
+          <Text style={[s.weekDayLabel, day.isToday && { color: C.orange }]}>{day.label}</Text>
+        </View>
+      ))}
+    </View>
+  )
 }
 
 // ── Hero Section ────────────────────────────────────────────────────────────
@@ -234,58 +322,90 @@ function MissionSection({ category, tasks }: { category: Task['category']; tasks
   )
 }
 
-// ── SOS Modal ───────────────────────────────────────────────────────────────
-function SOSModal({ onClose }: { onClose: () => void }) {
-  const { usePanicButton } = useStore()
+
+// ── End Day Button ───────────────────────────────────────────────────────────
+function EndDayButton({ completed, onPress }: { completed: boolean; onPress: () => void }) {
+  const scale = useRef(new Animated.Value(1)).current
+  const [celebrated, setCelebrated] = useState(false)
+
+  const handlePress = () => {
+    if (completed) return
+    Animated.sequence([
+      Animated.timing(scale, { toValue: 0.94, duration: 80, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: 1, friction: 4, useNativeDriver: true }),
+    ]).start()
+    setCelebrated(true)
+    onPress()
+  }
+
+  if (completed) {
+    return (
+      <View style={s.endDayDone}>
+        <Text style={s.endDayDoneText}>✓ היום הושלם — Streak עלה!</Text>
+      </View>
+    )
+  }
 
   return (
-    <Modal visible transparent animationType="fade">
-      <View style={s.sosOverlay}>
-        <TouchableOpacity style={s.sosCloseBtn} onPress={onClose}>
-          <Text style={{ color: C.dim, fontSize: 22 }}>✕</Text>
-        </TouchableOpacity>
-
-        <View style={s.sosContent}>
-          <Text style={s.sosTitle}>עצור</Text>
-          <Text style={s.sosSubtitle}>רגע של חולשה — זה בסדר. תנשום. אתה חזק יותר מהדחף הזה.</Text>
-
-          <View style={s.sosTip}>
-            <Text style={s.sosTipLabel}>PHYSICAL RESET</Text>
-            <Text style={s.sosTipText}>עשה 20 שכיבות סמיכה — עד שהגוף ישכח מה רצה.</Text>
-          </View>
-
-          <View style={s.sosTip}>
-            <Text style={s.sosTipLabel}>BREATHING</Text>
-            <Text style={s.sosTipText}>שאף 4 שניות · עצור 4 · נשוף 8 · חזור 3 פעמים.</Text>
-          </View>
-        </View>
-
-        <TouchableOpacity
-          onPress={() => { usePanicButton(); onClose() }}
-          style={s.survivedBtn}
-          activeOpacity={0.85}
-        >
-          <Text style={s.survivedBtnText}>עברתי את זה — +100 XP</Text>
-        </TouchableOpacity>
-      </View>
-    </Modal>
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <TouchableOpacity onPress={handlePress} style={s.endDayBtn} activeOpacity={0.85}>
+        <Text style={s.endDayBtnText}>סיים את היום  +1 🔥</Text>
+      </TouchableOpacity>
+    </Animated.View>
   )
 }
 
 // ── Main Screen ─────────────────────────────────────────────────────────────
 export default function BaseTab() {
-  const { tasks, level, xp, currentStreak, onboardingData } = useStore()
-  const [sosOpen, setSosOpen] = useState(false)
+  const {
+    tasks, level, xp, currentStreak, onboardingData,
+    lastCompletedDate, completeDay, addTriggerEntry, userName, streakStartDate, setbacks,
+  } = useStore()
   const sport = onboardingData?.sport ?? null
 
-  const doneTasks  = tasks.filter((t: Task) => t.isCompleted).length
-  const totalTasks = tasks.length
+  const doneTasks    = tasks.filter((t: Task) => t.isCompleted).length
+  const totalTasks   = tasks.length
+  const dayCompleted = lastCompletedDate === getTodayString()
+
+  const [journalVisible, setJournalVisible] = useState(false)
+  const [victoryVisible, setVictoryVisible] = useState(false)
+  const [victoryStreak,  setVictoryStreak]  = useState(1)
+  const [leveledUp,      setLeveledUp]      = useState(false)
+  const [newLevelName,   setNewLevelName]   = useState('')
+
+  // Capture pre-completeDay values so journal can use them
+  const pendingRef = React.useRef<{ nextStreak: number; nextLevel: number } | null>(null)
+
+  const handleCompleteDay = () => {
+    const nextStreak = currentStreak + 1
+    const nextLevel  = computeNextLevel(nextStreak, xp)
+    pendingRef.current = { nextStreak, nextLevel }
+    setJournalVisible(true)
+  }
+
+  const handleJournalComplete = (data: Omit<TriggerEntry, 'id' | 'date'>) => {
+    setJournalVisible(false)
+    addTriggerEntry(data)
+    const { nextStreak, nextLevel } = pendingRef.current!
+    const didLevelUp = nextLevel > level
+    completeDay()
+    setVictoryStreak(nextStreak)
+    setLeveledUp(didLevelUp)
+    setNewLevelName(LEVEL_REQUIREMENTS[Math.min(nextLevel - 1, 9)].name)
+    setVictoryVisible(true)
+  }
 
   return (
     <SafeAreaView style={s.container}>
+      <GreetingHeader name={userName} streak={currentStreak} />
       <StatsHUD streak={currentStreak} xp={xp} level={level} />
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+        <WeekHistory
+          streakStartDate={streakStartDate}
+          lastCompletedDate={lastCompletedDate}
+          setbacks={setbacks}
+        />
         <HeroSection level={level} sport={sport} />
         <XPProgress level={level} xp={xp} />
 
@@ -313,15 +433,26 @@ export default function BaseTab() {
           <MissionSection category="evening" tasks={tasks} />
         </View>
 
+        {/* End Day */}
+        <View style={s.endDayWrap}>
+          <EndDayButton completed={dayCompleted} onPress={handleCompleteDay} />
+        </View>
+
         <View style={{ height: 120 }} />
       </ScrollView>
 
-      {/* SOS floating button */}
-      <TouchableOpacity onPress={() => setSosOpen(true)} style={s.sosBtn} activeOpacity={0.8}>
-        <Text style={s.sosBtnText}>חירום</Text>
-      </TouchableOpacity>
+      <TriggerJournalModal
+        visible={journalVisible}
+        onComplete={handleJournalComplete}
+      />
 
-      {sosOpen && <SOSModal onClose={() => setSosOpen(false)} />}
+      <VictoryModal
+        visible={victoryVisible}
+        streak={victoryStreak}
+        leveledUp={leveledUp}
+        newLevelName={newLevelName}
+        onClose={() => setVictoryVisible(false)}
+      />
     </SafeAreaView>
   )
 }
@@ -330,6 +461,32 @@ export default function BaseTab() {
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
   scroll:    { paddingBottom: 20 },
+
+  // Greeting
+  greetingWrap: {
+    paddingHorizontal: 20, paddingTop: 14, paddingBottom: 6,
+  },
+  greetingText: {
+    fontSize: 22, fontFamily: F.black, color: C.text, textAlign: 'right',
+  },
+
+  // Week history
+  weekRow: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingVertical: 16,
+  },
+  weekDayCol:  { alignItems: 'center', gap: 6 },
+  weekCircle:  {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: '#1a1a1a', borderWidth: 1.5, borderColor: '#2a2a2a',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  weekCircleGreen:  { backgroundColor: C.green + '20', borderColor: C.green },
+  weekCircleRed:    { backgroundColor: C.red   + '15', borderColor: C.red   },
+  weekCircleToday:  { borderColor: C.orange, borderWidth: 2 },
+  weekCheck:        { fontSize: 14, color: C.green, fontFamily: F.black },
+  weekX:            { fontSize: 12, color: C.red,   fontFamily: F.black },
+  weekDayLabel:     { fontSize: 9, fontFamily: F.bold, color: C.dim, letterSpacing: 0.5 },
 
   // Stats HUD
   statsHUD: {
@@ -427,25 +584,17 @@ const s = StyleSheet.create({
   addBtn:     { backgroundColor: C.orange, borderRadius: 10, padding: 14, alignItems: 'center' },
   addBtnText: { color: '#fff', fontSize: 15, fontFamily: F.bold },
 
-  // SOS floating button
-  sosBtn: {
-    position: 'absolute', bottom: 92, right: 20,
-    width: 52, height: 52, borderRadius: 26,
-    backgroundColor: '#120505',
-    borderWidth: 1.5, borderColor: C.red + '60',
-    alignItems: 'center', justifyContent: 'center',
+  // End Day
+  endDayWrap: { marginHorizontal: 16, marginTop: 16 },
+  endDayBtn: {
+    backgroundColor: C.green, borderRadius: 16, padding: 20,
+    alignItems: 'center',
   },
-  sosBtnText: { fontSize: 9, fontFamily: F.black, color: C.red, letterSpacing: 0.5 },
+  endDayBtnText: { color: '#fff', fontSize: 17, fontFamily: F.black, letterSpacing: 0.5 },
+  endDayDone: {
+    borderRadius: 16, padding: 20, alignItems: 'center',
+    borderWidth: 1, borderColor: C.green + '40', backgroundColor: C.green + '0d',
+  },
+  endDayDoneText: { color: C.green, fontSize: 15, fontFamily: F.bold },
 
-  // SOS modal
-  sosOverlay:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.97)', padding: 24, justifyContent: 'space-between' },
-  sosCloseBtn:   { alignSelf: 'flex-end', padding: 8, marginTop: 20 },
-  sosContent:    { flex: 1, justifyContent: 'center', gap: 24 },
-  sosTitle:      { fontSize: 36, fontFamily: F.black, color: C.red, textAlign: 'center', letterSpacing: 3 },
-  sosSubtitle:   { fontSize: 15, fontFamily: F.regular, color: C.muted, textAlign: 'center', lineHeight: 24 },
-  sosTip:        { backgroundColor: '#0d0d0d', borderRadius: 12, borderWidth: 1, borderColor: '#1e1e1e', padding: 20 },
-  sosTipLabel:   { fontSize: 9, fontFamily: F.black, color: C.dim, letterSpacing: 2.5, marginBottom: 8 },
-  sosTipText:    { color: C.text, fontSize: 15, fontFamily: F.regular, textAlign: 'right', lineHeight: 24 },
-  survivedBtn:   { backgroundColor: C.green, borderRadius: 12, padding: 18, alignItems: 'center', marginBottom: 10 },
-  survivedBtnText: { color: '#fff', fontSize: 16, fontFamily: F.black, letterSpacing: 1 },
 })

@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useRouter } from 'expo-router'
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
   SafeAreaView, Modal, TextInput, Alert, Image, ImageSourcePropType,
@@ -48,7 +49,8 @@ function EditWhyModal({ current, onSave, onClose }: { current: string; onSave: (
 }
 
 export default function ProfileTab() {
-  const { onboardingData, currentStreak, longestStreak, xp, level, tasks, setbacks, checkins } = useStore()
+  const router = useRouter()
+  const { onboardingData, currentStreak, longestStreak, xp, level, tasks, setbacks, checkins, resetAll } = useStore()
   const [editingWhy, setEditingWhy] = useState(false)
   const [why, setWhy] = useState(onboardingData?.yourWhy || '')
 
@@ -183,7 +185,7 @@ export default function ProfileTab() {
         <TouchableOpacity
           onPress={() => Alert.alert('אתחול', 'פעולה זו תמחק את כל ההתקדמות שלך. האם אתה בטוח?', [
             { text: 'ביטול', style: 'cancel' },
-            { text: 'אפס הכל', style: 'destructive', onPress: () => {} },
+            { text: 'אפס הכל', style: 'destructive', onPress: () => { resetAll(); router.replace('/onboarding') } },
           ])}
           style={s.dangerBtn}
           activeOpacity={0.8}

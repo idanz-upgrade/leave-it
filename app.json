@@ -25,7 +25,15 @@
     },
     "plugins": [
       "expo-router",
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#FF6B2C",
+          "sounds": []
+        }
+      ]
     ],
     "scheme": "leave-it",
     "web": {
