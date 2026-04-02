@@ -186,6 +186,7 @@ interface State {
   triggerJournal: TriggerEntry[]
   isPro: boolean
   panicButtonUsedToday: number
+  totalTasksCompleted: number
 }
 
 interface Actions {
@@ -198,6 +199,7 @@ interface Actions {
   usePanicButton: () => void
   addTriggerEntry: (data: Omit<TriggerEntry, 'id' | 'date'>) => void
   setPro: (value: boolean) => void
+  setYourWhy: (why: string) => void
   startNewDay: () => void
   completeDay: () => void
   resetAll: () => void
@@ -227,6 +229,7 @@ export const useStore = create<State & Actions>()(
       triggerJournal: [],
       isPro: false,
       panicButtonUsedToday: 0,
+      totalTasksCompleted: 0,
 
       completeOnboarding: (data) => set({
         onboardingCompleted: true,
@@ -264,7 +267,14 @@ export const useStore = create<State & Actions>()(
           xpGain -= 50
         }
         const newXP = Math.max(0, state.xp + xpGain)
-        set({ tasks, xp: newXP, totalXP: Math.max(0, state.totalXP + xpGain), level: calculateLevel(state.currentStreak, newXP) })
+        const taskDelta = toggled?.isCompleted ? 1 : -1
+        set({
+          tasks,
+          xp: newXP,
+          totalXP: Math.max(0, state.totalXP + xpGain),
+          level: calculateLevel(state.currentStreak, newXP),
+          totalTasksCompleted: Math.max(0, state.totalTasksCompleted + taskDelta),
+        })
       },
 
       addTask: (task) => set(s => ({
@@ -307,6 +317,10 @@ export const useStore = create<State & Actions>()(
       }),
 
       setPro: (value) => set({ isPro: value }),
+
+      setYourWhy: (why) => set(s => ({
+        onboardingData: s.onboardingData ? { ...s.onboardingData, yourWhy: why } : s.onboardingData,
+      })),
 
       addTriggerEntry: (data) => set(s => ({
         triggerJournal: [
@@ -358,6 +372,7 @@ export const useStore = create<State & Actions>()(
         triggerJournal: [],
         isPro: false,
         panicButtonUsedToday: 0,
+        totalTasksCompleted: 0,
       }),
     }),
     {

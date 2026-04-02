@@ -37,9 +37,9 @@ const INIT: Answers = {
   languageStyle: 'secular',
 }
 
-// Steps 2–12 are the 11 data questions (show progress bar)
+// Progress bar spans from Phase 2 questions through end of task selection
 const Q_START = 2
-const Q_END = 12
+const Q_END = 23
 const Q_COUNT = Q_END - Q_START + 1
 
 // ── Shared UI ─────────────────────────────────────────────────────────────────
@@ -598,6 +598,7 @@ export default function OnboardingFlow() {
         )
 
       // ── Phase 2: Questions ──────────────────────────────────────────────────
+
       case 2:
         return (
           <MultiQ
@@ -700,11 +701,11 @@ export default function OnboardingFlow() {
             title="מה זה עולה לך?"
             subtitle="בחר כל מה שמתאים."
             opts={[
-              { label: 'מערכת יחסים',  icon: '❤️' },
+              { label: 'מערכת יחסים',      icon: '❤️' },
               { label: 'קריירה / לימודים', icon: '💼' },
-              { label: 'כבוד עצמי',    icon: '🧠' },
-              { label: 'בריאות',       icon: '🏃' },
-              { label: 'זמן',          icon: '⏱️' },
+              { label: 'כבוד עצמי',        icon: '🧠' },
+              { label: 'בריאות',           icon: '🏃' },
+              { label: 'זמן',              icon: '⏱️' },
             ]}
             onNext={v => next({ costs: v })}
           />
@@ -715,47 +716,35 @@ export default function OnboardingFlow() {
             title="מה אתה רוצה בחזרה?"
             subtitle="בחר כל מה שמתאים."
             opts={[
-              { label: 'מיקוד וחדות',       icon: '👁️' },
-              { label: 'ביטחון עצמי',       icon: '⭐' },
-              { label: 'מוטיבציה',           icon: '🔥' },
-              { label: 'חיי חברה חזקים',    icon: '👥' },
-              { label: 'שליטה בדחפים',      icon: '✋' },
+              { label: 'מיקוד וחדות',    icon: '👁️' },
+              { label: 'ביטחון עצמי',    icon: '⭐' },
+              { label: 'מוטיבציה',       icon: '🔥' },
+              { label: 'חיי חברה חזקים', icon: '👥' },
+              { label: 'שליטה בדחפים',  icon: '✋' },
             ]}
             onNext={v => next({ goals: v })}
           />
         )
-      case 11: {
-        const goalOptions = answers.goals.length > 0
-          ? answers.goals
-          : ['מיקוד וחדות', 'ביטחון עצמי', 'מוטיבציה']
-        return (
-          <DynamicSingleQ
-            title="אם היית בוחר רק דבר אחד..."
-            options={goalOptions}
-            onNext={v => next({ primaryGoal: v })}
-          />
-        )
-      }
-      case 12:
+      case 11:
         return (
           <BigTwoQ
             title="מה מניע אותך יותר?"
             opts={[
-              { label: 'להיות טוב יותר',       sublabel: 'אני רוצה לממש את הפוטנציאל שלי', emoji: '⬆️', value: 'growth' },
-              { label: 'לברוח מהכאב',          sublabel: 'אני רוצה להפסיק להרגיש כך',     emoji: '🔄', value: 'escape' },
+              { label: 'להיות טוב יותר', sublabel: 'אני רוצה לממש את הפוטנציאל שלי', emoji: '⬆️', value: 'growth' },
+              { label: 'לברוח מהכאב',   sublabel: 'אני רוצה להפסיק להרגיש כך',      emoji: '🔄', value: 'escape' },
             ]}
             onNext={v => next({ motivationType: v })}
           />
         )
 
       // ── Phase 2.5: Identity ─────────────────────────────────────────────────
-      case 13:
+      case 12:
         return <SportQ onNext={v => next({ sport: v })} />
-      case 14:
+      case 13:
         return <LanguageStyleQ onNext={v => next({ languageStyle: v })} />
 
       // ── Phase 3: Education ──────────────────────────────────────────────────
-      case 15:
+      case 14:
         return (
           <HookScreen
             title={'זו לא בעיה\nשל כוח רצון.'}
@@ -764,9 +753,9 @@ export default function OnboardingFlow() {
             onPress={() => next()}
           />
         )
-      case 16:
+      case 15:
         return <EduDopamine onNext={() => next()} />
-      case 17:
+      case 16:
         return (
           <HookScreen
             title={'כל פעם,\nהנפילה עמוקה יותר.'}
@@ -775,75 +764,26 @@ export default function OnboardingFlow() {
             onPress={() => next()}
           />
         )
-      case 18:
+      case 17:
         return <EduHeal onNext={() => next()} />
-      case 19:
-        return (
-          <HookScreen
-            title={'ההחלמה היא\nלא להתנגד.'}
-            subtitle="היא להחליף."
-            btn="הראה לי"
-            onPress={() => next()}
-          />
-        )
-      case 20:
-        return (
-          <HookScreen
-            title={'ניסית בעבר.'}
-            subtitle="שיטות אחרות נכשלו כי הן רק אמרו לך לעצור."
-            green="זה נותן לך משהו להתחיל."
-            btn="הבנתי"
-            onPress={() => next()}
-          />
-        )
-      case 21:
-        return (
-          <HookScreen
-            title={'החלף.\nבנה מחדש.'}
-            subtitle={'השלם משימות יומיות כדי לעלות רמה.\nצפה בבסיס שלך מתחזק.'}
-            btn="בנה את הבסיס שלי"
-            onPress={() => next()}
-          />
-        )
-      case 22:
-        return <EduStats onNext={() => next()} />
-      case 23:
-        return (
-          <HookScreen
-            title={'זו לא עוד\nאפליקציה\nשתמחק.'}
-            subtitle="זו בנייה מחדש."
-            btn="הבנתי"
-            onPress={() => next()}
-          />
-        )
-      case 24:
-        return (
-          <HookScreen
-            title={'אתה מוכן\nלעשות את\nהעבודה?'}
-            subtitle={'בלי קיצורים. בלי תירוצים.\nרק פעולה עקבית.'}
-            btn="כן, אני מוכן"
-            onPress={() => next()}
-          />
-        )
 
       // ── Phase 4: Commitment ─────────────────────────────────────────────────
-      case 25:
+      case 18:
         return <NameEntry onNext={v => next({ name: v })} />
-      case 26:
+      case 19:
         return <WhyEntry onNext={v => next({ yourWhy: v })} />
 
       // ── Phase 5: Tasks ──────────────────────────────────────────────────────
-      case 27:
+      case 20:
         return (
           <HookScreen
             title={'המשימות\nהיומיות שלך.'}
-            subtitle={'אלה ההרגלים שיחליפו\nאת הדפוסים הישנים שלך.'}
-            green="השלם אותם כל יום כדי לעלות רמה."
+            subtitle={'השלם אותם כל יום כדי לעלות רמה.'}
             btn="בחר משימות"
             onPress={() => next()}
           />
         )
-      case 28: {
+      case 21: {
         const morningRec = [
           ...(answers.dangerTime === 'בוקר' ? ['אין טלפון 30 דקות ראשונות'] : []),
           ...(answers.triggers.includes('לחץ') ? ['מקלחת קרה', 'אימון בוקר'] : ['מקלחת קרה']),
@@ -867,7 +807,7 @@ export default function OnboardingFlow() {
           />
         )
       }
-      case 29: {
+      case 22: {
         const anytimeRec = [
           ...(answers.triggers.includes('שעמום') ? ['סשן עבודה ממוקדת', 'קריאת 20 עמודים'] : []),
           ...(answers.dangerPlaces.includes('ליד המחשב') ? ['ללא רשתות חברתיות (2 שעות)'] : []),
@@ -892,7 +832,7 @@ export default function OnboardingFlow() {
           />
         )
       }
-      case 30: {
+      case 23: {
         const eveningRec = [
           ...(answers.dangerTime === 'לילה מאוחר' || answers.triggers.includes('מאוחר בלילה') || answers.dangerTime === 'ערב'
             ? ['טלפון הצידה ב-22:00'] : []),
@@ -913,33 +853,17 @@ export default function OnboardingFlow() {
             ]}
             min={1} max={3}
             recommended={eveningRec}
-            onNext={v => next({ selectedEveningTasks: v })}
+            onNext={v => finish({ ...answers, selectedEveningTasks: v })}
           />
         )
       }
 
-      // ── Phase 6: End ────────────────────────────────────────────────────────
-      case 31:
-        return <PlanReady answers={answers} onNext={() => next()} />
-      case 32:
-        return (
-          <HookScreen
-            title={'התחל היום.\nלא מחר.'}
-            subtitle={'כל יום שאתה מחכה הוא עוד יום תקוע.\nהתוכנית מוכנה. הבסיס מחכה.'}
-            green="המסע שלך מתחיל עכשיו"
-            btn="פתח את התוכנית"
-            onPress={() => next()}
-          />
-        )
-      case 33:
-        return <WelcomeEnd name={answers.name} languageStyle={answers.languageStyle} onDone={() => finish(answers)} />
-
       default:
-        return <WelcomeEnd name={answers.name} languageStyle={answers.languageStyle} onDone={() => finish(answers)} />
+        return null
     }
   }
 
-  const showBack = step > 0 && step < 33
+  const showBack = step > 0
   const showProgress = step >= Q_START && step <= Q_END
 
   return (
