@@ -582,44 +582,42 @@ function TaskSelect({ category, title, emoji, subtitle, tasks, min, max, recomme
 
   const ready = sel.length >= min
 
+  // Flat layout (no space-between) — prevents PillBtn from overlapping checkboxes
   return (
-    <View style={s.qWrap}>
-      {/* Wrap header + list together — fixes space-between layout bug */}
-      <View>
-        <View style={s.taskHeader}>
-          <Text style={s.taskEmoji}>{emoji}</Text>
-          <Text style={s.taskTitle}>{title}</Text>
-          <Text style={s.taskSub}>{subtitle}</Text>
-          <View style={s.taskPick}>
-            <Text style={s.taskPickText}>בחר {min}–{max}</Text>
-          </View>
-          <Text style={s.taskCount}>{sel.length} נבחרו</Text>
+    <View style={{ paddingTop: 24 }}>
+      <View style={s.taskHeader}>
+        <Text style={s.taskEmoji}>{emoji}</Text>
+        <Text style={s.taskTitle}>{title}</Text>
+        <Text style={s.taskSub}>{subtitle}</Text>
+        <View style={s.taskPick}>
+          <Text style={s.taskPickText}>בחר {min}–{max}</Text>
         </View>
-        <View style={s.optList}>
-          {allTasks.map(t => (
-            <View key={t}>
-              <CheckRow label={t} selected={sel.includes(t)} onPress={() => toggle(t)} />
-              {recommended?.includes(t) && !sel.includes(t) && (
-                <Text style={s.recBadge}>מומלץ עבורך ★</Text>
-              )}
-            </View>
-          ))}
-          {/* Custom task row */}
-          <View style={s.customRow}>
-            <TouchableOpacity onPress={addCustom} style={s.customAddBtn} activeOpacity={0.8}>
-              <Text style={s.customAddText}>+</Text>
-            </TouchableOpacity>
-            <TextInput
-              value={customInput}
-              onChangeText={setCustomInput}
-              placeholder="הוסף משימה מותאמת..."
-              placeholderTextColor="#3e3e52"
-              style={s.customInput}
-              textAlign="right"
-              returnKeyType="done"
-              onSubmitEditing={addCustom}
-            />
+        <Text style={s.taskCount}>{sel.length} נבחרו</Text>
+      </View>
+      <View style={s.optList}>
+        {allTasks.map(t => (
+          <View key={t}>
+            <CheckRow label={t} selected={sel.includes(t)} onPress={() => toggle(t)} />
+            {recommended?.includes(t) && !sel.includes(t) && (
+              <Text style={s.recBadge}>מומלץ עבורך ★</Text>
+            )}
           </View>
+        ))}
+        {/* Custom task row */}
+        <View style={s.customRow}>
+          <TouchableOpacity onPress={addCustom} style={s.customAddBtn} activeOpacity={0.8}>
+            <Text style={s.customAddText}>+</Text>
+          </TouchableOpacity>
+          <TextInput
+            value={customInput}
+            onChangeText={setCustomInput}
+            placeholder="הוסף משימה מותאמת..."
+            placeholderTextColor="#3e3e52"
+            style={s.customInput}
+            textAlign="right"
+            returnKeyType="done"
+            onSubmitEditing={addCustom}
+          />
         </View>
       </View>
       <PillBtn label={category === 'evening' ? 'נעל משימות' : 'הבא'} onPress={() => onNext(sel)} disabled={!ready} />
@@ -675,11 +673,102 @@ function WelcomeEnd({ name, languageStyle, onDone }: { name: string; languageSty
   )
 }
 
-// ── Task Confirmation ─────────────────────────────────────────────────────────
-function TaskConfirm({ morning, anytime, evening, onConfirm, onEase }: {
-  morning: string[]; anytime: string[]; evening: string[];
-  onConfirm: () => void; onEase: () => void
+// ── Task Editor (edit mode for TaskConfirm) ───────────────────────────────────
+type EditableTask = { text: string; category: 'morning' | 'anytime' | 'evening' }
+const CAT_META = [
+  { cat: 'morning' as const, emoji: '🌅', label: 'בוקר' },
+  { cat: 'anytime' as const, emoji: '⚡', label: 'יום' },
+  { cat: 'evening' as const, emoji: '🌙', label: 'ערב' },
+]
+
+function TaskEditor({ initialMorning, initialAnytime, initialEvening, onDone }: {
+  initialMorning: string[]; initialAnytime: string[]; initialEvening: string[];
+  onDone: (m: string[], a: string[], e: string[]) => void
 }) {
+  const [tasks, setTasks] = useState<EditableTask[]>(() => [
+    ...initialMorning.map(t => ({ text: t, category: 'morning' as const })),
+    ...initialAnytime.map(t => ({ text: t, category: 'anytime' as const })),
+    ...initialEvening.map(t => ({ text: t, category: 'evening' as const })),
+  ])
+
+  const moveTo = (text: string, cat: EditableTask['category']) =>
+    setTasks(p => p.map(t => t.text === text ? { ...t, category: cat } : t))
+
+  const remove = (text: string) =>
+    setTasks(p => p.filter(t => t.text !== text))
+
+  const handleDone = () => onDone(
+    tasks.filter(t => t.category === 'morning').map(t => t.text),
+    tasks.filter(t => t.category === 'anytime').map(t => t.text),
+    tasks.filter(t => t.category === 'evening').map(t => t.text),
+  )
+
+  return (
+    <View style={{ paddingTop: 16 }}>
+      <Text style={[s.hookTitle, { fontSize: 26, marginBottom: 6 }]}>ערוך את התוכנית</Text>
+      <Text style={[s.hookSub, { textAlign: 'right', marginBottom: 20 }]}>
+        הזז משימות בין קטגוריות או מחק כדי להקל
+      </Text>
+
+      {CAT_META.map(sec => {
+        const sectionTasks = tasks.filter(t => t.category === sec.cat)
+        return (
+          <View key={sec.cat} style={s.editSection}>
+            <Text style={s.editSectionTitle}>{sec.emoji}  {sec.label}</Text>
+            {sectionTasks.length === 0
+              ? <Text style={s.editEmpty}>אין משימות</Text>
+              : sectionTasks.map(task => (
+                <View key={task.text} style={s.editTaskRow}>
+                  {/* Category move buttons + delete */}
+                  <View style={s.editCatBtns}>
+                    {CAT_META.map(cm => (
+                      <TouchableOpacity
+                        key={cm.cat}
+                        onPress={() => moveTo(task.text, cm.cat)}
+                        style={[s.editCatBtn, task.category === cm.cat && s.editCatBtnActive]}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={s.editCatBtnEmoji}>{cm.emoji}</Text>
+                      </TouchableOpacity>
+                    ))}
+                    <TouchableOpacity onPress={() => remove(task.text)} style={s.editDeleteBtn} activeOpacity={0.75}>
+                      <Text style={s.editDeleteText}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={s.editTaskText}>{task.text}</Text>
+                </View>
+              ))
+            }
+          </View>
+        )
+      })}
+
+      <View style={{ marginTop: 20 }}>
+        <PillBtn label="אני מרוצה מהתוכנית 💪" onPress={handleDone} />
+      </View>
+    </View>
+  )
+}
+
+// ── Task Confirmation ─────────────────────────────────────────────────────────
+function TaskConfirm({ morning, anytime, evening, onConfirm, onUpdateAndConfirm }: {
+  morning: string[]; anytime: string[]; evening: string[];
+  onConfirm: () => void;
+  onUpdateAndConfirm: (m: string[], a: string[], e: string[]) => void;
+}) {
+  const [editing, setEditing] = useState(false)
+
+  if (editing) {
+    return (
+      <TaskEditor
+        initialMorning={morning}
+        initialAnytime={anytime}
+        initialEvening={evening}
+        onDone={(m, a, e) => onUpdateAndConfirm(m, a, e)}
+      />
+    )
+  }
+
   const sections = [
     { emoji: '🌅', label: 'בוקר', tasks: morning },
     { emoji: '⚡', label: 'יום',  tasks: anytime },
@@ -703,7 +792,7 @@ function TaskConfirm({ morning, anytime, evening, onConfirm, onEase }: {
       </View>
       <View style={{ gap: 10 }}>
         <PillBtn label="כן, אני מתחייב לזה 💪" onPress={onConfirm} />
-        <TouchableOpacity onPress={onEase} style={s.easeBtn} activeOpacity={0.8}>
+        <TouchableOpacity onPress={() => setEditing(true)} style={s.easeBtn} activeOpacity={0.8}>
           <Text style={s.easeBtnText}>זה יותר מדי, תקל עלי</Text>
         </TouchableOpacity>
       </View>
@@ -1114,22 +1203,20 @@ export default function OnboardingFlow() {
           />
         )
       }
-      case 23: {
-        const handleEase = () => upd({
-          selectedMorningTasks: answers.selectedMorningTasks.slice(0, Math.max(0, answers.selectedMorningTasks.length - 1)),
-          selectedAnytimeTasks: answers.selectedAnytimeTasks.slice(0, Math.max(0, answers.selectedAnytimeTasks.length - 1)),
-          selectedEveningTasks: answers.selectedEveningTasks.slice(0, Math.max(0, answers.selectedEveningTasks.length - 1)),
-        })
+      case 23:
         return (
           <TaskConfirm
             morning={answers.selectedMorningTasks}
             anytime={answers.selectedAnytimeTasks}
             evening={answers.selectedEveningTasks}
             onConfirm={() => next()}
-            onEase={handleEase}
+            onUpdateAndConfirm={(m, a, e) => next({
+              selectedMorningTasks: m,
+              selectedAnytimeTasks: a,
+              selectedEveningTasks: e,
+            })}
           />
         )
-      }
       case 24:
         return <LoadingScreen onDone={() => next()} />
       case 25:
@@ -1330,6 +1417,34 @@ const s = StyleSheet.create({
   // Ease button
   easeBtn: { alignItems: 'center', paddingVertical: 14 },
   easeBtnText: { fontSize: 14, fontFamily: F.regular, color: '#8b8b9e', textDecorationLine: 'underline' },
+
+  // Task editor
+  editSection: {
+    marginBottom: 18,
+    backgroundColor: '#12121f', borderRadius: 14,
+    borderWidth: 1, borderColor: '#1e1e2e', padding: 14,
+  },
+  editSectionTitle: { fontSize: 12, fontFamily: F.bold, color: C.orange, textAlign: 'right', marginBottom: 10, letterSpacing: 1 },
+  editEmpty: { fontSize: 13, color: '#444', fontFamily: F.regular, textAlign: 'right' },
+  editTaskRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#1e1e2e',
+  },
+  editTaskText: { fontSize: 14, fontFamily: F.regular, color: '#e2e2e8', flex: 1, textAlign: 'right', marginRight: 10 },
+  editCatBtns: { flexDirection: 'row', gap: 6, alignItems: 'center' },
+  editCatBtn: {
+    width: 32, height: 32, borderRadius: 8,
+    borderWidth: 1.5, borderColor: '#2a2a2a',
+    backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center',
+  },
+  editCatBtnActive: { borderColor: C.orange, backgroundColor: C.orange + '22' },
+  editCatBtnEmoji: { fontSize: 15 },
+  editDeleteBtn: {
+    width: 32, height: 32, borderRadius: 8,
+    borderWidth: 1.5, borderColor: '#3a1a1a',
+    backgroundColor: '#1a0a0a', alignItems: 'center', justifyContent: 'center',
+  },
+  editDeleteText: { fontSize: 13, color: '#ef4444', fontFamily: F.bold },
 
   // Plan highlights
   highlightCard: {
