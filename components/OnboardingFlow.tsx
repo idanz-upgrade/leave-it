@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import {
   View, Text, TouchableOpacity, TextInput, StyleSheet,
   ScrollView, KeyboardAvoidingView, Platform, SafeAreaView, Animated,
+  ActivityIndicator,
 } from 'react-native'
 import { router } from 'expo-router'
 import { useStore, OnboardingData } from '@/lib/store'
@@ -202,6 +203,20 @@ function BigTwoQ({ title, opts, onNext }: {
       <PillBtn label="המשך" onPress={() => onNext(sel)} disabled={!sel} />
     </View>
   )
+}
+
+// ── Hobby task helper ─────────────────────────────────────────────────────────
+function hobbyTask(hobby: string, ctx: 'morning' | 'anytime' | 'evening'): string | null {
+  if (!hobby) return null
+  if (ctx === 'evening') return hobby === 'כלי נגינה' ? 'נגינה 20 דקות' : 'סקירת היום'
+  const map: Record<string, string> = {
+    'כדורגל':    ctx === 'morning' ? 'אימון כדורגל בוקר' : 'אימון כדורגל',
+    'ריצה':     ctx === 'morning' ? 'ריצה בוקר' : 'ריצה',
+    'כלי נגינה': 'נגינה 15 דקות',
+    'כדורסל':   ctx === 'morning' ? 'אימון כדורסל בוקר' : 'אימון כדורסל',
+    'טניס':    ctx === 'morning' ? 'אימון טניס בוקר' : 'אימון טניס',
+  }
+  return map[hobby] ?? hobby
 }
 
 // ── Q: Hobby selection ────────────────────────────────────────────────────────
@@ -660,6 +675,120 @@ function WelcomeEnd({ name, languageStyle, onDone }: { name: string; languageSty
   )
 }
 
+// ── Task Confirmation ─────────────────────────────────────────────────────────
+function TaskConfirm({ morning, anytime, evening, onConfirm, onEase }: {
+  morning: string[]; anytime: string[]; evening: string[];
+  onConfirm: () => void; onEase: () => void
+}) {
+  const sections = [
+    { emoji: '🌅', label: 'בוקר', tasks: morning },
+    { emoji: '⚡', label: 'יום',  tasks: anytime },
+    { emoji: '🌙', label: 'ערב',  tasks: evening },
+  ]
+  return (
+    <View style={s.hookWrap}>
+      <View style={s.hookCenter}>
+        <Text style={s.hookTitle}>{'האם תוכל\nלעמוד בזה?'}</Text>
+        <Text style={s.hookSub}>בוא נהיה כנים — האם זה ריאלי עבורך?</Text>
+        <View style={s.confirmCard}>
+          {sections.map(sec => sec.tasks.length > 0 && (
+            <View key={sec.label} style={s.confirmSection}>
+              <Text style={s.confirmSectionTitle}>{sec.emoji}  {sec.label}</Text>
+              {sec.tasks.map(t => (
+                <Text key={t} style={s.confirmTask}>• {t}</Text>
+              ))}
+            </View>
+          ))}
+        </View>
+      </View>
+      <View style={{ gap: 10 }}>
+        <PillBtn label="כן, אני מתחייב לזה 💪" onPress={onConfirm} />
+        <TouchableOpacity onPress={onEase} style={s.easeBtn} activeOpacity={0.8}>
+          <Text style={s.easeBtnText}>זה יותר מדי, תקל עלי</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  )
+}
+
+// ── Loading Screen ────────────────────────────────────────────────────────────
+function LoadingScreen({ onDone }: { onDone: () => void }) {
+  useEffect(() => {
+    const timer = setTimeout(onDone, 4000)
+    return () => clearTimeout(timer)
+  }, [])
+  return (
+    <View style={[s.hookWrap, { alignItems: 'center' }]}>
+      <View style={s.hookCenter}>
+        <ActivityIndicator size="large" color={C.orange} />
+        <Text style={[s.hookTitle, { marginTop: 28 }]}>{'בונה את התוכנית\nהאישית שלך...'}</Text>
+        <Text style={s.hookSub}>מנתח את התשובות שלך</Text>
+      </View>
+    </View>
+  )
+}
+
+// ── 90-Day Plan Screen ────────────────────────────────────────────────────────
+function PlanScreen({ answers, onDone }: { answers: Answers; onDone: () => void }) {
+  const isPleasure = answers.motivationType === 'pleasure'
+  const name       = answers.nickname || answers.name || 'לוחם'
+  const goalsText  = answers.goals.slice(0, 2).join(' + ') || 'מה שחשוב לך'
+  const costsText  = answers.costs.slice(0, 2).join(' + ') || 'מה שהפסדת'
+
+  const phases = isPleasure
+    ? [
+        { range: '0–14',  label: 'הדחפים מתחילים להיחלש',      color: '#4ade80' },
+        { range: '14–30', label: `${goalsText} חוזרים אליך`,    color: '#60a5fa' },
+        { range: '30–90', label: 'אתה הופך לאדם שרצית להיות',   color: '#fbbf24' },
+      ]
+    : [
+        { range: '0–14',  label: 'הכאב מתחיל להיחלש',          color: '#4ade80' },
+        { range: '14–30', label: `${costsText} מתחיל להשתפר`,  color: '#60a5fa' },
+        { range: '30–90', label: 'החיים שאיבדת — חוזרים',       color: '#fbbf24' },
+      ]
+
+  const highlights = (isPleasure ? answers.goals : answers.costs).slice(0, 3)
+
+  return (
+    <View style={s.hookWrap}>
+      <View style={[s.hookCenter, { paddingTop: 16 }]}>
+        <Text style={s.hookTitle}>{`התוכנית שלך\nמוכנה, ${name}`}</Text>
+
+        {/* Timeline */}
+        <View style={{ width: '100%', marginTop: 20 }}>
+          {phases.map((ph, i) => (
+            <View key={i} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 16 }}>
+              <View style={{ alignItems: 'center', marginLeft: 14 }}>
+                <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: ph.color, marginTop: 3 }} />
+                {i < phases.length - 1 && (
+                  <View style={{ width: 2, height: 28, backgroundColor: ph.color + '44', marginTop: 4 }} />
+                )}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: ph.color, fontSize: 11, fontFamily: F.bold, textAlign: 'right' }}>{ph.range} ימים</Text>
+                <Text style={{ color: '#fff', fontSize: 15, fontFamily: F.bold, lineHeight: 22, textAlign: 'right' }}>{ph.label}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+
+        {/* Highlights */}
+        {highlights.length > 0 && (
+          <View style={{ width: '100%', gap: 8, marginTop: 8 }}>
+            {highlights.map(h => (
+              <View key={h} style={s.highlightCard}>
+                <Text style={s.highlightText}>{h}</Text>
+                <Text style={s.highlightCheck}>✓</Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+      <PillBtn label="אני רוצה את זה ←" onPress={onDone} />
+    </View>
+  )
+}
+
 // ── Main Flow ─────────────────────────────────────────────────────────────────
 export default function OnboardingFlow() {
   const [step, setStep] = useState(0)
@@ -907,9 +1036,11 @@ export default function OnboardingFlow() {
           />
         )
       case 20: {
+        const mHobby   = hobbyTask(answers.hobby, 'morning')
         const morningRec = [
           ...(answers.dangerTime === 'בוקר' ? ['אין טלפון 30 דקות ראשונות'] : []),
-          ...(answers.triggers.includes('לחץ') ? ['מקלחת קרה', 'אימון בוקר'] : ['מקלחת קרה']),
+          'מקלחת קרה',
+          ...(mHobby ? [mHobby] : []),
         ]
         return (
           <TaskSelect
@@ -920,9 +1051,9 @@ export default function OnboardingFlow() {
             tasks={[
               'אין טלפון 30 דקות ראשונות',
               'מקלחת קרה',
-              'אימון בוקר',
               'סידור המיטה',
               'הליכה בבוקר',
+              ...(mHobby ? [mHobby] : []),
             ]}
             min={1} max={3}
             recommended={morningRec}
@@ -931,31 +1062,33 @@ export default function OnboardingFlow() {
         )
       }
       case 21: {
+        const aHobby   = hobbyTask(answers.hobby, 'anytime')
         const anytimeRec = [
           ...(answers.triggers.includes('שעמום') ? ['סשן עבודה ממוקדת', 'קריאת 20 עמודים'] : []),
           ...(answers.dangerPlaces.includes('ליד המחשב') ? ['ללא רשתות חברתיות (2 שעות)'] : []),
-          ...(answers.goals.includes('מוטיבציה') ? ['אימון'] : []),
+          ...(aHobby ? [aHobby] : []),
         ]
         return (
           <TaskSelect
             category="anytime"
-            title="בכל עת"
+            title="במהלך היום"
             emoji="⚡"
             subtitle="מלא את יומך בניצחונות אמיתיים. ידיים עסוקות, מוח צלול."
             tasks={[
-              'אימון',
               'קריאת 20 עמודים',
-              'הליכה',
               'סשן עבודה ממוקדת',
               'ללא רשתות חברתיות (2 שעות)',
+              'הליכה',
+              ...(aHobby ? [aHobby] : []),
             ]}
-            min={2} max={4}
+            min={1} max={2}
             recommended={anytimeRec}
             onNext={v => next({ selectedAnytimeTasks: v })}
           />
         )
       }
       case 22: {
+        const eHobby   = hobbyTask(answers.hobby, 'evening')
         const eveningRec = [
           ...(answers.dangerTime === 'לילה מאוחר' || answers.triggers.includes('מאוחר בלילה') || answers.dangerTime === 'ערב'
             ? ['טלפון הצידה ב-22:00'] : []),
@@ -971,22 +1104,43 @@ export default function OnboardingFlow() {
               'טלפון הצידה ב-22:00',
               'יומן',
               'קריאה לפני שינה',
-              'מתיחות ערב / יוגה',
+              'מתיחות / יוגה',
               'תכנון למחר',
+              ...(eHobby ? [eHobby] : []),
             ]}
             min={1} max={3}
             recommended={eveningRec}
-            onNext={v => finish({ ...answers, selectedEveningTasks: v })}
+            onNext={v => next({ selectedEveningTasks: v })}
           />
         )
       }
+      case 23: {
+        const handleEase = () => upd({
+          selectedMorningTasks: answers.selectedMorningTasks.slice(0, Math.max(0, answers.selectedMorningTasks.length - 1)),
+          selectedAnytimeTasks: answers.selectedAnytimeTasks.slice(0, Math.max(0, answers.selectedAnytimeTasks.length - 1)),
+          selectedEveningTasks: answers.selectedEveningTasks.slice(0, Math.max(0, answers.selectedEveningTasks.length - 1)),
+        })
+        return (
+          <TaskConfirm
+            morning={answers.selectedMorningTasks}
+            anytime={answers.selectedAnytimeTasks}
+            evening={answers.selectedEveningTasks}
+            onConfirm={() => next()}
+            onEase={handleEase}
+          />
+        )
+      }
+      case 24:
+        return <LoadingScreen onDone={() => next()} />
+      case 25:
+        return <PlanScreen answers={answers} onDone={() => finish(answers)} />
 
       default:
         return null
     }
   }
 
-  const showBack = step > 0
+  const showBack = step > 0 && step !== 24
   const showProgress = step >= Q_START && step <= Q_END
 
   return (
@@ -1163,6 +1317,28 @@ const s = StyleSheet.create({
   planLabel: { fontSize: 14, fontFamily: F.regular, color: '#8b8b9e', textAlign: 'right' },
   planValue: { fontSize: 14, fontFamily: F.bold, color: '#ffffff' },
   planBuilt: { fontSize: 12, fontFamily: F.regular, color: '#8b8b9e', textAlign: 'center', marginTop: 12 },
+
+  // Task confirmation
+  confirmCard: {
+    backgroundColor: '#12121f', borderRadius: 16, borderWidth: 1, borderColor: '#1e1e2e',
+    padding: 16, width: '100%', marginTop: 20, gap: 14,
+  },
+  confirmSection: { gap: 6 },
+  confirmSectionTitle: { fontSize: 13, fontFamily: F.bold, color: C.orange, textAlign: 'right' },
+  confirmTask: { fontSize: 14, fontFamily: F.regular, color: '#e2e2e8', textAlign: 'right', paddingRight: 8 },
+
+  // Ease button
+  easeBtn: { alignItems: 'center', paddingVertical: 14 },
+  easeBtnText: { fontSize: 14, fontFamily: F.regular, color: '#8b8b9e', textDecorationLine: 'underline' },
+
+  // Plan highlights
+  highlightCard: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: '#12121f', borderRadius: 12, borderWidth: 1, borderColor: '#1e1e2e',
+    paddingHorizontal: 16, paddingVertical: 12,
+  },
+  highlightText:  { fontSize: 14, fontFamily: F.regular, color: '#e2e2e8', flex: 1, textAlign: 'right' },
+  highlightCheck: { fontSize: 18, color: '#4ade80', marginLeft: 10 },
 
   // Custom task input
   customRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8 },
