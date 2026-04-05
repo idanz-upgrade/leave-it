@@ -41,7 +41,9 @@ export type Sport = 'football' | 'basketball' | 'tennis' | 'running'
 
 export interface OnboardingData {
   name: string
+  nickname: string
   sport: Sport | null
+  hobby: string
   symptoms: string[]
   habitDuration: string
   frequency: string

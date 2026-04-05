@@ -4,7 +4,7 @@ import {
   ScrollView, KeyboardAvoidingView, Platform, SafeAreaView, Animated,
 } from 'react-native'
 import { router } from 'expo-router'
-import { useStore, OnboardingData, Sport } from '@/lib/store'
+import { useStore, OnboardingData } from '@/lib/store'
 import { C, F } from '@/lib/theme'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -20,8 +20,9 @@ type Answers = {
   goals: string[]
   primaryGoal: string
   motivationType: string
-  sport: Sport | null
+  hobby: string
   name: string
+  nickname: string
   yourWhy: string
   selectedMorningTasks: string[]
   selectedAnytimeTasks: string[]
@@ -32,14 +33,14 @@ type Answers = {
 const INIT: Answers = {
   symptoms: [], habitDuration: '', frequency: '', triedBefore: '',
   triggers: [], dangerPlaces: [], dangerTime: '', costs: [], goals: [],
-  primaryGoal: '', motivationType: '', sport: null, name: '', yourWhy: '',
+  primaryGoal: '', motivationType: '', hobby: '', name: '', nickname: '', yourWhy: '',
   selectedMorningTasks: [], selectedAnytimeTasks: [], selectedEveningTasks: [],
   languageStyle: 'secular',
 }
 
 // Progress bar spans from Phase 2 questions through end of task selection
 const Q_START = 2
-const Q_END = 23
+const Q_END = 22
 const Q_COUNT = Q_END - Q_START + 1
 
 // ── Shared UI ─────────────────────────────────────────────────────────────────
@@ -203,35 +204,60 @@ function BigTwoQ({ title, opts, onNext }: {
   )
 }
 
-// ── Q: Sport selection (4-card grid) ─────────────────────────────────────────
-function SportQ({ onNext }: { onNext: (v: Sport) => void }) {
-  const [sel, setSel] = useState<Sport | null>(null)
-  const SPORTS: { value: Sport; label: string; emoji: string }[] = [
-    { value: 'football',   label: 'כדורגל',   emoji: '⚽' },
-    { value: 'basketball', label: 'כדורסל',   emoji: '🏀' },
-    { value: 'tennis',     label: 'טניס',     emoji: '🎾' },
-    { value: 'running',    label: 'ריצה',      emoji: '🏃' },
+// ── Q: Hobby selection ────────────────────────────────────────────────────────
+function HobbyQ({ onNext }: { onNext: (v: string) => void }) {
+  const [sel, setSel]             = useState('')
+  const [customText, setCustomText] = useState('')
+  const HOBBIES = [
+    { value: 'כדורגל',    emoji: '⚽' },
+    { value: 'כדורסל',   emoji: '🏀' },
+    { value: 'טניס',      emoji: '🎾' },
+    { value: 'ריצה',      emoji: '🏃' },
+    { value: 'כלי נגינה', emoji: '🎸' },
   ]
+  const isOther  = sel === 'other'
+  const canNext  = sel && (sel !== 'other' || customText.trim().length > 0)
+  const handleNext = () => onNext(isOther ? customText.trim() : sel)
+
   return (
     <View style={s.qWrap}>
       <View>
-        <Text style={s.qTitle}>איזה ספורט{'\n'}קרוב לליבך?</Text>
-        <Text style={s.qSub}>הדמות שלך תיבנה בהתאם.</Text>
+        <Text style={s.qTitle}>מה התחביב שלך?</Text>
         <View style={s.sportGrid}>
-          {SPORTS.map(sp => (
+          {HOBBIES.map(h => (
             <TouchableOpacity
-              key={sp.value}
-              onPress={() => setSel(sp.value)}
+              key={h.value}
+              onPress={() => { setSel(h.value); setCustomText('') }}
               activeOpacity={0.8}
-              style={[s.sportCard, sel === sp.value && s.sportCardSel]}
+              style={[s.sportCard, sel === h.value && s.sportCardSel]}
             >
-              <Text style={s.sportEmoji}>{sp.emoji}</Text>
-              <Text style={[s.sportLabel, sel === sp.value && s.sportLabelSel]}>{sp.label}</Text>
+              <Text style={s.sportEmoji}>{h.emoji}</Text>
+              <Text style={[s.sportLabel, sel === h.value && s.sportLabelSel]}>{h.value}</Text>
             </TouchableOpacity>
           ))}
+          <TouchableOpacity
+            onPress={() => setSel('other')}
+            activeOpacity={0.8}
+            style={[s.sportCard, isOther && s.sportCardSel]}
+          >
+            <Text style={s.sportEmoji}>➕</Text>
+            <Text style={[s.sportLabel, isOther && s.sportLabelSel]}>אחר</Text>
+          </TouchableOpacity>
         </View>
+        {isOther && (
+          <TextInput
+            value={customText}
+            onChangeText={setCustomText}
+            placeholder="הכנס תחביב..."
+            placeholderTextColor={C.dim}
+            style={[s.nameInput, { marginTop: 0, marginBottom: 0 }]}
+            textAlign="right"
+            autoFocus
+            returnKeyType="done"
+          />
+        )}
       </View>
-      <PillBtn label="המשך" onPress={() => sel && onNext(sel)} disabled={!sel} />
+      <PillBtn label="המשך" onPress={handleNext} disabled={!canNext} />
     </View>
   )
 }
@@ -289,8 +315,11 @@ function DynamicSingleQ({ title, subtitle, options, onNext }: {
 }
 
 // ── Name entry ────────────────────────────────────────────────────────────────
-function NameEntry({ onNext }: { onNext: (name: string) => void }) {
-  const [name, setName] = useState('')
+function NameEntry({ onNext }: { onNext: (name: string, nickname: string) => void }) {
+  const [name, setName]           = useState('')
+  const [nickname, setNickname]   = useState('')
+  const nicknameRef               = useRef<any>(null)
+
   return (
     <View style={s.qWrap}>
       <Text style={s.hookTitle}>בואו נעשה{'\n'}את זה רשמי.</Text>
@@ -298,16 +327,27 @@ function NameEntry({ onNext }: { onNext: (name: string) => void }) {
       <TextInput
         value={name}
         onChangeText={setName}
-        placeholder="הכנס שם"
+        placeholder="מה שמך?"
         placeholderTextColor={C.dim}
         style={s.nameInput}
-        textAlign="center"
+        textAlign="right"
         autoFocus
-        returnKeyType="done"
-        onSubmitEditing={() => name.trim() && onNext(name.trim())}
+        returnKeyType="next"
+        onSubmitEditing={() => nicknameRef.current?.focus()}
       />
-      <Text style={s.nameHint}>כתוב את שמך כדי להתחייב</Text>
-      <PillBtn label="אני בפנים" onPress={() => onNext(name.trim())} disabled={name.trim().length < 2} />
+      <TextInput
+        ref={nicknameRef}
+        value={nickname}
+        onChangeText={setNickname}
+        placeholder="לוחם, אריה, מלך..."
+        placeholderTextColor={C.dim}
+        style={[s.nameInput, { marginTop: 12 }]}
+        textAlign="right"
+        returnKeyType="done"
+        onSubmitEditing={() => name.trim().length >= 2 && onNext(name.trim(), nickname.trim())}
+      />
+      <Text style={s.nameHint}>שם פרטי + כינוי (לא חובה)</Text>
+      <PillBtn label="אני בפנים" onPress={() => onNext(name.trim(), nickname.trim())} disabled={name.trim().length < 2} />
     </View>
   )
 }
@@ -339,47 +379,128 @@ function WhyEntry({ onNext }: { onNext: (v: string) => void }) {
 
 // ── Edu: Dopamine graph ───────────────────────────────────────────────────────
 function EduDopamine({ onNext }: { onNext: () => void }) {
+  // Heights: above baseline = 140px, below = 80px
+  const ABOVE = 140
+  const BELOW = 80
+
   return (
     <View style={s.hookWrap}>
       <View style={s.hookCenter}>
         <Text style={s.hookTitle}>הנה מה{'\n'}שקורה.</Text>
-        <Text style={s.hookSub}>גירוי מהיר מזנק את הדופמין.{'\n'}ואז הבסיס שלך קורס.</Text>
-        {/* Dopamine graph visual */}
-        <View style={s.graphWrap}>
-          <Text style={s.graphLabel}>בסיס</Text>
-          <View style={s.graphLine}>
-            <View style={s.graphSpike} />
-            <View style={s.graphCrash} />
+
+        <View style={{ width: '100%', marginVertical: 20 }}>
+          {/* Above-baseline section */}
+          <View style={{ height: ABOVE, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-around' }}>
+            {/* לפני */}
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end' }}>
+              <View style={{ width: 44, height: 50, backgroundColor: '#444', borderTopLeftRadius: 6, borderTopRightRadius: 6 }} />
+            </View>
+            {/* במהלך – peak */}
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end' }}>
+              <Text style={{ color: C.orange, fontSize: 12, fontFamily: F.bold, marginBottom: 4 }}>שיא</Text>
+              <View style={{ width: 44, height: 130, backgroundColor: C.orange, borderTopLeftRadius: 6, borderTopRightRadius: 6 }} />
+            </View>
+            {/* אחרי – empty above */}
+            <View style={{ flex: 1 }} />
           </View>
-          <Text style={s.graphCrashLabel}>הנפילה</Text>
+
+          {/* Dashed baseline */}
+          <View style={{ flexDirection: 'row', gap: 4, paddingHorizontal: 4 }}>
+            {Array.from({ length: 22 }).map((_, i) => (
+              <View key={i} style={{ flex: 1, height: 2, backgroundColor: '#555', borderRadius: 1 }} />
+            ))}
+          </View>
+          <Text style={{ color: '#888', fontSize: 10, fontFamily: F.regular, textAlign: 'right', marginTop: 2, marginBottom: 0 }}>
+            נורמה
+          </Text>
+
+          {/* Below-baseline section */}
+          <View style={{ height: BELOW, flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-around' }}>
+            {/* לפני – nothing */}
+            <View style={{ flex: 1 }} />
+            {/* במהלך – nothing */}
+            <View style={{ flex: 1 }} />
+            {/* אחרי – red crash */}
+            <View style={{ flex: 1, alignItems: 'center' }}>
+              <View style={{ width: 44, height: 60, backgroundColor: '#ef4444', borderBottomLeftRadius: 6, borderBottomRightRadius: 6 }} />
+              <Text style={{ color: '#ef4444', fontSize: 10, fontFamily: F.bold, textAlign: 'center', marginTop: 4 }}>
+                {'מתחת\nלנורמה'}
+              </Text>
+            </View>
+          </View>
+
+          {/* X-axis labels */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginTop: 4 }}>
+            <Text style={{ flex: 1, textAlign: 'center', color: '#8b8b9e', fontSize: 12, fontFamily: F.regular }}>לפני</Text>
+            <Text style={{ flex: 1, textAlign: 'center', color: '#8b8b9e', fontSize: 12, fontFamily: F.regular }}>במהלך</Text>
+            <Text style={{ flex: 1, textAlign: 'center', color: '#8b8b9e', fontSize: 12, fontFamily: F.regular }}>אחרי</Text>
+          </View>
         </View>
-        <Text style={s.hookSub}>כלום אחר לא מרגיש מתגמל.</Text>
+
+        <Text style={s.hookSub}>{'זו הסיבה שאחרי אתה מרגיש\nריקנות, עייפות ודיכאון קל'}</Text>
       </View>
       <PillBtn label="זה מסביר הרבה" onPress={onNext} />
     </View>
   )
 }
 
-// ── Edu: Brain heals (14/30/90) ───────────────────────────────────────────────
+// ── Edu: Brain heals – calendar grid ─────────────────────────────────────────
 function EduHeal({ onNext }: { onNext: () => void }) {
-  const milestones = [
-    { days: '14', color: '#a78bfa', title: 'הדחפים נחלשים', sub: 'הסערה הראשונית עוברת' },
-    { days: '30', color: '#fb923c', title: 'הבהירות חוזרת', sub: 'מיקוד ואנרגיה משתפרים' },
-    { days: '90', color: '#4ade80', title: 'קו בסיס חדש', sub: 'המוח עוצב מחדש' },
+  const MILESTONES = [
+    { at: 14, color: '#4ade80', label: 'הדחפים מתחילים להיחלש' },
+    { at: 30, color: '#60a5fa', label: 'אנרגיה וריכוז חוזרים' },
+    { at: 90, color: '#fbbf24', label: 'המוח שלך השתנה' },
   ]
+  const getColor = (day: number) => {
+    if (day <= 14) return '#4ade80'
+    if (day <= 30) return '#60a5fa'
+    return '#fbbf24'
+  }
+  // 13 rows × 7 cols = 91 cells; days 1-90 colored, cell 91 empty
+  const rows = Array.from({ length: 13 }, (_, r) =>
+    Array.from({ length: 7 }, (_, c) => r * 7 + c + 1)
+  )
+
   return (
     <View style={s.hookWrap}>
-      <View style={s.hookCenter}>
+      <View style={[s.hookCenter, { paddingTop: 20 }]}>
         <Text style={s.hookTitle}>המוח שלך{'\n'}יכול להחלים.</Text>
-        <View style={s.healList}>
-          {milestones.map((m, i) => (
-            <View key={i} style={s.healRow}>
-              <View style={[s.healDot, { backgroundColor: m.color }]} />
-              <Text style={[s.healDays, { color: m.color }]}>{m.days} ימים</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={s.healTitle}>{m.title}</Text>
-                <Text style={s.healSub}>{m.sub}</Text>
-              </View>
+
+        {/* Calendar grid */}
+        <View style={{ width: '100%', marginVertical: 16 }}>
+          {rows.map((row, ri) => (
+            <View key={ri} style={{ flexDirection: 'row', gap: 3, marginBottom: 3 }}>
+              {row.map(day => {
+                const color = getColor(day)
+                const isMark = day === 14 || day === 30 || day === 90
+                return (
+                  <View
+                    key={day}
+                    style={{
+                      flex: 1, aspectRatio: 1, borderRadius: 4,
+                      backgroundColor: day <= 90 ? color + '28' : 'transparent',
+                      borderWidth: day <= 90 ? 1.5 : 0,
+                      borderColor: day <= 90 ? (isMark ? color : color + '55') : 'transparent',
+                      alignItems: 'center', justifyContent: 'center',
+                    }}
+                  >
+                    {isMark && (
+                      <Text style={{ fontSize: 7, color, fontFamily: F.bold }}>{day}</Text>
+                    )}
+                  </View>
+                )
+              })}
+            </View>
+          ))}
+        </View>
+
+        {/* Milestone tooltips */}
+        <View style={{ gap: 8, width: '100%' }}>
+          {MILESTONES.map(m => (
+            <View key={m.at} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: m.color }} />
+              <Text style={{ color: m.color, fontSize: 13, fontFamily: F.bold }}>{m.at} יום</Text>
+              <Text style={{ color: '#8b8b9e', fontSize: 12, fontFamily: F.regular, flex: 1, textAlign: 'right' }}>— {m.label}</Text>
             </View>
           ))}
         </View>
@@ -555,7 +676,9 @@ export default function OnboardingFlow() {
   const finish = (finalAnswers: Answers) => {
     const data: OnboardingData = {
       name:                 finalAnswers.name,
-      sport:                finalAnswers.sport,
+      nickname:             finalAnswers.nickname,
+      sport:                null,
+      hobby:                finalAnswers.hobby,
       symptoms:             finalAnswers.symptoms,
       habitDuration:        finalAnswers.habitDuration,
       frequency:            finalAnswers.frequency,
@@ -568,7 +691,7 @@ export default function OnboardingFlow() {
       primaryGoal:          finalAnswers.primaryGoal,
       motivationType:       finalAnswers.motivationType,
       yourWhy:              finalAnswers.yourWhy,
-      languageStyle:        finalAnswers.languageStyle,
+      languageStyle:        'secular',
       selectedMorningTasks:  finalAnswers.selectedMorningTasks,
       selectedAnytimeTasks:  finalAnswers.selectedAnytimeTasks,
       selectedEveningTasks:  finalAnswers.selectedEveningTasks,
@@ -701,11 +824,13 @@ export default function OnboardingFlow() {
             title="מה זה עולה לך?"
             subtitle="בחר כל מה שמתאים."
             opts={[
-              { label: 'מערכת יחסים',      icon: '❤️' },
-              { label: 'קריירה / לימודים', icon: '💼' },
-              { label: 'כבוד עצמי',        icon: '🧠' },
-              { label: 'בריאות',           icon: '🏃' },
-              { label: 'זמן',              icon: '⏱️' },
+              { label: 'מערכת יחסים',                              icon: '❤️' },
+              { label: 'קריירה / לימודים',                         icon: '💼' },
+              { label: 'כבוד עצמי',                                icon: '🧠' },
+              { label: 'בריאות',                                   icon: '🏃' },
+              { label: 'זמן',                                      icon: '⏱️' },
+              { label: 'תחושת בושה וחרטה',                         icon: '😞' },
+              { label: 'אתה לא מרוצה מאיך שאתה נראה על עצמך',     icon: '🪞' },
             ]}
             onNext={v => next({ costs: v })}
           />
@@ -730,8 +855,8 @@ export default function OnboardingFlow() {
           <BigTwoQ
             title="מה מניע אותך יותר?"
             opts={[
-              { label: 'להיות טוב יותר', sublabel: 'אני רוצה לממש את הפוטנציאל שלי', emoji: '⬆️', value: 'growth' },
-              { label: 'לברוח מהכאב',   sublabel: 'אני רוצה להפסיק להרגיש כך',      emoji: '🔄', value: 'escape' },
+              { label: 'להיות טוב יותר', sublabel: 'אני רוצה לממש את הפוטנציאל שלי', emoji: '⬆️', value: 'pleasure' },
+              { label: 'לברוח מהכאב',   sublabel: 'אני רוצה להפסיק להרגיש כך',      emoji: '🔄', value: 'pain' },
             ]}
             onNext={v => next({ motivationType: v })}
           />
@@ -739,23 +864,21 @@ export default function OnboardingFlow() {
 
       // ── Phase 2.5: Identity ─────────────────────────────────────────────────
       case 12:
-        return <SportQ onNext={v => next({ sport: v })} />
-      case 13:
-        return <LanguageStyleQ onNext={v => next({ languageStyle: v })} />
+        return <HobbyQ onNext={v => next({ hobby: v })} />
 
       // ── Phase 3: Education ──────────────────────────────────────────────────
-      case 14:
+      case 13:
         return (
           <HookScreen
-            title={'זו לא בעיה\nשל כוח רצון.'}
+            title={'זה לא עניין של\nכוח רצון —\nזה מדע מדויק'}
             subtitle="המוח שלך נחטף."
-            btn="מה הכוונה?"
+            btn="אני רוצה להבין"
             onPress={() => next()}
           />
         )
-      case 15:
+      case 14:
         return <EduDopamine onNext={() => next()} />
-      case 16:
+      case 15:
         return (
           <HookScreen
             title={'כל פעם,\nהנפילה עמוקה יותר.'}
@@ -764,17 +887,17 @@ export default function OnboardingFlow() {
             onPress={() => next()}
           />
         )
-      case 17:
+      case 16:
         return <EduHeal onNext={() => next()} />
 
       // ── Phase 4: Commitment ─────────────────────────────────────────────────
+      case 17:
+        return <NameEntry onNext={(name, nickname) => next({ name, nickname })} />
       case 18:
-        return <NameEntry onNext={v => next({ name: v })} />
-      case 19:
         return <WhyEntry onNext={v => next({ yourWhy: v })} />
 
       // ── Phase 5: Tasks ──────────────────────────────────────────────────────
-      case 20:
+      case 19:
         return (
           <HookScreen
             title={'המשימות\nהיומיות שלך.'}
@@ -783,7 +906,7 @@ export default function OnboardingFlow() {
             onPress={() => next()}
           />
         )
-      case 21: {
+      case 20: {
         const morningRec = [
           ...(answers.dangerTime === 'בוקר' ? ['אין טלפון 30 דקות ראשונות'] : []),
           ...(answers.triggers.includes('לחץ') ? ['מקלחת קרה', 'אימון בוקר'] : ['מקלחת קרה']),
@@ -807,7 +930,7 @@ export default function OnboardingFlow() {
           />
         )
       }
-      case 22: {
+      case 21: {
         const anytimeRec = [
           ...(answers.triggers.includes('שעמום') ? ['סשן עבודה ממוקדת', 'קריאת 20 עמודים'] : []),
           ...(answers.dangerPlaces.includes('ליד המחשב') ? ['ללא רשתות חברתיות (2 שעות)'] : []),
@@ -832,7 +955,7 @@ export default function OnboardingFlow() {
           />
         )
       }
-      case 23: {
+      case 22: {
         const eveningRec = [
           ...(answers.dangerTime === 'לילה מאוחר' || answers.triggers.includes('מאוחר בלילה') || answers.dangerTime === 'ערב'
             ? ['טלפון הצידה ב-22:00'] : []),
