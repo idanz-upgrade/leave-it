@@ -568,10 +568,8 @@ function TaskSelect({ category, title, emoji, subtitle, tasks, min, max, recomme
   const allTasks = [...tasks, ...customTasks]
 
   const toggle = (v: string) => {
-    console.log('[TaskSelect] toggle', { category, task: v, selBefore: sel, max })
     if (sel.includes(v)) { setSel(p => p.filter(x => x !== v)); return }
     if (sel.length < max) setSel(p => [...p, v])
-    else console.log('[TaskSelect] max reached, ignoring toggle')
   }
 
   const addCustom = () => {
