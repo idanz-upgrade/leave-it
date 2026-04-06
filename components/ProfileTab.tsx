@@ -8,7 +8,6 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useStore, LEVEL_REQUIREMENTS, Sport } from '@/lib/store'
 import { C, F } from '@/lib/theme'
-import SOSModal from '@/components/SOSModal'
 import { getOrCreateAnonymousId } from '@/lib/leaderboard'
 import { supabase } from '@/lib/supabase'
 
@@ -84,7 +83,6 @@ export default function ProfileTab() {
   } = useStore()
 
   const [editingWhy, setEditingWhy]         = useState(false)
-  const [sosVisible, setSosVisible]         = useState(false)
   const [remindersOn, setRemindersOn]       = useState(true)
 
   const why  = onboardingData?.yourWhy ?? ''
@@ -311,13 +309,6 @@ export default function ProfileTab() {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* Fixed "צריך עזרה?" button */}
-      <View style={s.helpBar}>
-        <TouchableOpacity onPress={() => setSosVisible(true)} style={s.helpBtn} activeOpacity={0.85}>
-          <Text style={s.helpBtnText}>⚡  צריך עזרה?</Text>
-        </TouchableOpacity>
-      </View>
-
       {/* Modals */}
       {editingWhy && (
         <EditWhyModal
@@ -326,7 +317,6 @@ export default function ProfileTab() {
           onClose={() => setEditingWhy(false)}
         />
       )}
-      <SOSModal visible={sosVisible} onClose={() => setSosVisible(false)} />
     </SafeAreaView>
   )
 }
@@ -445,21 +435,6 @@ const s = StyleSheet.create({
     borderRadius: 10, padding: 14, alignItems: 'center',
   },
   dangerBtnText: { color: C.red, fontSize: 13, fontFamily: F.bold, letterSpacing: 0.5 },
-
-  // Help bar
-  helpBar: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    paddingHorizontal: 16, paddingBottom: 12, paddingTop: 8,
-    backgroundColor: C.bg,
-    borderTopWidth: 1, borderTopColor: '#1a1a1a',
-  },
-  helpBtn: {
-    backgroundColor: C.orange + '18',
-    borderWidth: 1.5, borderColor: C.orange,
-    borderRadius: 14, paddingVertical: 14,
-    alignItems: 'center',
-  },
-  helpBtnText: { color: C.orange, fontSize: 15, fontFamily: F.black, letterSpacing: 0.5 },
 
   // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
