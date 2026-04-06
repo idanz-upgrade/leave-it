@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
   Modal, TextInput, SafeAreaView, Animated, Image, ImageSourcePropType,
+  KeyboardAvoidingView, Platform,
 } from 'react-native'
 import { useStore, Task, TriggerEntry, LEVEL_REQUIREMENTS, Sport, Setback } from '@/lib/store'
 import { C, F } from '@/lib/theme'
@@ -266,25 +267,30 @@ function AddTaskModal({ category, onClose }: { category: Task['category']; onClo
 
   return (
     <Modal visible transparent animationType="slide">
-      <TouchableOpacity style={s.modalOverlay} onPress={onClose} activeOpacity={1}>
-        <TouchableOpacity activeOpacity={1} style={s.bottomSheet}>
-          <View style={s.sheetHandle} />
-          <Text style={s.sheetTitle}>{labels[category]}</Text>
-          <TextInput
-            value={title}
-            onChangeText={setTitle}
-            placeholder="שם המשימה..."
-            placeholderTextColor={C.dim}
-            style={s.addInput}
-            textAlign="right"
-            autoFocus
-            onSubmitEditing={handleAdd}
-          />
-          <TouchableOpacity onPress={handleAdd} style={s.addBtn} activeOpacity={0.85}>
-            <Text style={s.addBtnText}>הוסף</Text>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+      >
+        <TouchableOpacity style={s.modalOverlay} onPress={onClose} activeOpacity={1}>
+          <TouchableOpacity activeOpacity={1} style={s.bottomSheet}>
+            <View style={s.sheetHandle} />
+            <Text style={s.sheetTitle}>{labels[category]}</Text>
+            <TextInput
+              value={title}
+              onChangeText={setTitle}
+              placeholder="שם המשימה..."
+              placeholderTextColor={C.dim}
+              style={s.addInput}
+              textAlign="right"
+              autoFocus
+              onSubmitEditing={handleAdd}
+            />
+            <TouchableOpacity onPress={handleAdd} style={s.addBtn} activeOpacity={0.85}>
+              <Text style={s.addBtnText}>הוסף</Text>
+            </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
-      </TouchableOpacity>
+      </KeyboardAvoidingView>
     </Modal>
   )
 }
@@ -400,7 +406,7 @@ export default function BaseTab() {
       <GreetingHeader name={userName} streak={currentStreak} />
       <StatsHUD streak={currentStreak} xp={xp} level={level} />
 
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <WeekHistory
           streakStartDate={streakStartDate}
           lastCompletedDate={lastCompletedDate}
