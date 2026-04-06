@@ -42,16 +42,16 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 20,
     bottom: 92,           // 72px tab bar + 20px margin
-    width: 56, height: 56, borderRadius: 28,
+    width: 160, height: 48, borderRadius: 28,
     backgroundColor: '#FF6B2C',
     alignItems: 'center', justifyContent: 'center',
     shadowColor: '#FF6B2C',
-    shadowOpacity: 0.5,
+    shadowOpacity: 0.45,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
     elevation: 8,
   },
-  sosIcon: { fontSize: 24 },
+  sosIcon: { fontSize: 15, color: '#fff', fontFamily: F.bold },
 })
 
 export default function TabLayout() {
@@ -122,7 +122,7 @@ export default function TabLayout() {
         onPress={() => setSosVisible(true)}
         activeOpacity={0.85}
       >
-        <Text style={styles.sosIcon}>⚡</Text>
+        <Text style={styles.sosIcon}>צריך עזרה? ⚡</Text>
       </TouchableOpacity>
 
       <SOSModal visible={sosVisible} onClose={() => setSosVisible(false)} />
