@@ -393,63 +393,128 @@ function WhyEntry({ onNext }: { onNext: (v: string) => void }) {
 }
 
 // ── Edu: Dopamine graph ───────────────────────────────────────────────────────
+// Layout: 3 points on a horizontal axis connected by two diagonal line segments.
+// Each segment is a thin View rotated to the correct angle.
+//
+//  ABOVE_BASE = 100px  (space above the dashed baseline)
+//  BELOW_BASE = 70px   (space below the dashed baseline)
+//
+//  Point positions (x from left, y from baseline, positive = up):
+//    לפני    x=60   y=+20   (slightly above baseline)
+//    במהלך  x=180  y=+90   (peak)
+//    אחרי   x=300  y=-55   (below baseline)
+//
+// Each segment is drawn as a 2px-tall View whose width equals the distance
+// between the two points, rotated with transform: [{rotate}].
+
 function EduDopamine({ onNext }: { onNext: () => void }) {
-  // Heights: above baseline = 140px, below = 80px
-  const ABOVE = 140
-  const BELOW = 80
+  // Canvas dimensions
+  const W         = 320   // total width of the graph area
+  const ABOVE     = 100   // px above baseline
+  const BELOW     = 70    // px below baseline
+  const TOTAL_H   = ABOVE + BELOW
+
+  // Point coords: x from left edge, yUp = distance above baseline (negative = below)
+  const pts = [
+    { x: 50,  yUp: 18  },   // לפני
+    { x: 160, yUp: 90  },   // במהלך (peak)
+    { x: 270, yUp: -52 },   // אחרי
+  ]
+
+  // Helper: render a line segment from pt[i] to pt[j]
+  const Segment = ({ i, j, color }: { i: number; j: number; color: string }) => {
+    const a = pts[i], b = pts[j]
+    const dx = b.x - a.x
+    const dy = -(b.yUp - a.yUp)   // screen y is inverted
+    const len = Math.sqrt(dx * dx + dy * dy)
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI)
+    // Origin of the View is the midpoint of the segment
+    const mx = (a.x + b.x) / 2
+    const my = ABOVE - (a.yUp + b.yUp) / 2
+    return (
+      <View
+        style={{
+          position: 'absolute',
+          width: len, height: 3,
+          backgroundColor: color,
+          borderRadius: 2,
+          left: mx - len / 2,
+          top:  my - 1.5,
+          transform: [{ rotate: `${angle}deg` }],
+        }}
+      />
+    )
+  }
+
+  // Helper: dot at a point
+  const Dot = ({ i, color }: { i: number; color: string }) => (
+    <View
+      style={{
+        position: 'absolute',
+        width: 12, height: 12, borderRadius: 6,
+        backgroundColor: color,
+        left: pts[i].x - 6,
+        top:  ABOVE - pts[i].yUp - 6,
+      }}
+    />
+  )
 
   return (
     <View style={s.hookWrap}>
       <View style={s.hookCenter}>
         <Text style={s.hookTitle}>הנה מה{'\n'}שקורה.</Text>
 
-        <View style={{ width: '100%', marginVertical: 20 }}>
-          {/* Above-baseline section */}
-          <View style={{ height: ABOVE, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-around' }}>
-            {/* לפני */}
-            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end' }}>
-              <View style={{ width: 44, height: 50, backgroundColor: '#444', borderTopLeftRadius: 6, borderTopRightRadius: 6 }} />
-            </View>
-            {/* במהלך – peak */}
-            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end' }}>
-              <Text style={{ color: C.orange, fontSize: 12, fontFamily: F.bold, marginBottom: 4 }}>שיא</Text>
-              <View style={{ width: 44, height: 130, backgroundColor: C.orange, borderTopLeftRadius: 6, borderTopRightRadius: 6 }} />
-            </View>
-            {/* אחרי – empty above */}
-            <View style={{ flex: 1 }} />
-          </View>
+        {/* Graph container */}
+        <View style={{ width: W, alignSelf: 'center', marginVertical: 16 }}>
 
-          {/* Dashed baseline */}
-          <View style={{ flexDirection: 'row', gap: 4, paddingHorizontal: 4 }}>
-            {Array.from({ length: 22 }).map((_, i) => (
-              <View key={i} style={{ flex: 1, height: 2, backgroundColor: '#555', borderRadius: 1 }} />
-            ))}
-          </View>
-          <Text style={{ color: '#888', fontSize: 10, fontFamily: F.regular, textAlign: 'right', marginTop: 2, marginBottom: 0 }}>
-            נורמה
-          </Text>
+          {/* Canvas */}
+          <View style={{ width: W, height: TOTAL_H, position: 'relative' }}>
 
-          {/* Below-baseline section */}
-          <View style={{ height: BELOW, flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-around' }}>
-            {/* לפני – nothing */}
-            <View style={{ flex: 1 }} />
-            {/* במהלך – nothing */}
-            <View style={{ flex: 1 }} />
-            {/* אחרי – red crash */}
-            <View style={{ flex: 1, alignItems: 'center' }}>
-              <View style={{ width: 44, height: 60, backgroundColor: '#ef4444', borderBottomLeftRadius: 6, borderBottomRightRadius: 6 }} />
-              <Text style={{ color: '#ef4444', fontSize: 10, fontFamily: F.bold, textAlign: 'center', marginTop: 4 }}>
-                {'מתחת\nלנורמה'}
-              </Text>
+            {/* Dashed baseline */}
+            <View style={{ position: 'absolute', left: 0, right: 0, top: ABOVE - 1, flexDirection: 'row', gap: 5 }}>
+              {Array.from({ length: 28 }).map((_, i) => (
+                <View key={i} style={{ flex: 1, height: 2, backgroundColor: '#555', borderRadius: 1 }} />
+              ))}
             </View>
+
+            {/* Line segments */}
+            <Segment i={0} j={1} color={C.orange} />
+            <Segment i={1} j={2} color="#ef4444" />
+
+            {/* Dots */}
+            <Dot i={0} color="#888" />
+            <Dot i={1} color={C.orange} />
+            <Dot i={2} color="#ef4444" />
+
+            {/* Label: שיא (above peak) */}
+            <Text style={{
+              position: 'absolute',
+              left: pts[1].x - 20, top: ABOVE - pts[1].yUp - 26,
+              color: C.orange, fontSize: 12, fontFamily: F.bold,
+            }}>שיא</Text>
+
+            {/* Label: מתחת לנורמה (below after-point) */}
+            <Text style={{
+              position: 'absolute',
+              left: pts[2].x - 48, top: ABOVE - pts[2].yUp + 10,
+              color: '#ef4444', fontSize: 11, fontFamily: F.bold, textAlign: 'center',
+            }}>{'מתחת\nלנורמה'}</Text>
+
+            {/* Label: נורמה (on baseline, right side) */}
+            <Text style={{
+              position: 'absolute',
+              right: 0, top: ABOVE - 18,
+              color: '#666', fontSize: 10, fontFamily: F.regular,
+            }}>נורמה</Text>
           </View>
 
           {/* X-axis labels */}
-          <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginTop: 4 }}>
-            <Text style={{ flex: 1, textAlign: 'center', color: '#8b8b9e', fontSize: 12, fontFamily: F.regular }}>לפני</Text>
-            <Text style={{ flex: 1, textAlign: 'center', color: '#8b8b9e', fontSize: 12, fontFamily: F.regular }}>במהלך</Text>
-            <Text style={{ flex: 1, textAlign: 'center', color: '#8b8b9e', fontSize: 12, fontFamily: F.regular }}>אחרי</Text>
+          <View style={{ flexDirection: 'row', marginTop: 8 }}>
+            <Text style={{ position: 'absolute', left: pts[0].x - 14, color: '#8b8b9e', fontSize: 12, fontFamily: F.regular }}>לפני</Text>
+            <Text style={{ position: 'absolute', left: pts[1].x - 22, color: '#8b8b9e', fontSize: 12, fontFamily: F.regular }}>במהלך</Text>
+            <Text style={{ position: 'absolute', left: pts[2].x - 14, color: '#8b8b9e', fontSize: 12, fontFamily: F.regular }}>אחרי</Text>
           </View>
+          <View style={{ height: 22 }} />
         </View>
 
         <Text style={s.hookSub}>{'זו הסיבה שאחרי אתה מרגיש\nריקנות, עייפות ודיכאון קל'}</Text>
@@ -459,63 +524,56 @@ function EduDopamine({ onNext }: { onNext: () => void }) {
   )
 }
 
-// ── Edu: Brain heals – calendar grid ─────────────────────────────────────────
+// ── Edu: Brain heals – milestone cards ───────────────────────────────────────
 function EduHeal({ onNext }: { onNext: () => void }) {
-  const MILESTONES = [
-    { at: 14, color: '#4ade80', label: 'הדחפים מתחילים להיחלש' },
-    { at: 30, color: '#60a5fa', label: 'אנרגיה וריכוז חוזרים' },
-    { at: 90, color: '#fbbf24', label: 'המוח שלך השתנה' },
+  const CARDS = [
+    {
+      emoji: '🌱',
+      title: '14 יום',
+      text: 'הדחפים מתחילים להיחלש. המוח מתחיל להסתגל.',
+      border: '#22C55E',
+      bg: '#052010',
+    },
+    {
+      emoji: '💡',
+      title: '30 יום',
+      text: 'הבהירות חוזרת. אנרגיה, ריכוז ומוטיבציה עולים.',
+      border: '#3B82F6',
+      bg: '#030d1f',
+    },
+    {
+      emoji: '🏆',
+      title: '90 יום',
+      text: 'קו בסיס חדש. המוח שלך השתנה לחלוטין.',
+      border: '#F59E0B',
+      bg: '#1a1000',
+    },
   ]
-  const getColor = (day: number) => {
-    if (day <= 14) return '#4ade80'
-    if (day <= 30) return '#60a5fa'
-    return '#fbbf24'
-  }
-  // 13 rows × 7 cols = 91 cells; days 1-90 colored, cell 91 empty
-  const rows = Array.from({ length: 13 }, (_, r) =>
-    Array.from({ length: 7 }, (_, c) => r * 7 + c + 1)
-  )
 
   return (
     <View style={s.hookWrap}>
-      <View style={[s.hookCenter, { paddingTop: 20 }]}>
+      <View style={[s.hookCenter, { paddingTop: 12 }]}>
         <Text style={s.hookTitle}>המוח שלך{'\n'}יכול להחלים.</Text>
-
-        {/* Calendar grid */}
-        <View style={{ width: '100%', marginVertical: 16 }}>
-          {rows.map((row, ri) => (
-            <View key={ri} style={{ flexDirection: 'row', gap: 3, marginBottom: 3 }}>
-              {row.map(day => {
-                const color = getColor(day)
-                const isMark = day === 14 || day === 30 || day === 90
-                return (
-                  <View
-                    key={day}
-                    style={{
-                      flex: 1, aspectRatio: 1, borderRadius: 4,
-                      backgroundColor: day <= 90 ? color + '28' : 'transparent',
-                      borderWidth: day <= 90 ? 1.5 : 0,
-                      borderColor: day <= 90 ? (isMark ? color : color + '55') : 'transparent',
-                      alignItems: 'center', justifyContent: 'center',
-                    }}
-                  >
-                    {isMark && (
-                      <Text style={{ fontSize: 7, color, fontFamily: F.bold }}>{day}</Text>
-                    )}
-                  </View>
-                )
-              })}
-            </View>
-          ))}
-        </View>
-
-        {/* Milestone tooltips */}
-        <View style={{ gap: 8, width: '100%' }}>
-          {MILESTONES.map(m => (
-            <View key={m.at} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: m.color }} />
-              <Text style={{ color: m.color, fontSize: 13, fontFamily: F.bold }}>{m.at} יום</Text>
-              <Text style={{ color: '#8b8b9e', fontSize: 12, fontFamily: F.regular, flex: 1, textAlign: 'right' }}>— {m.label}</Text>
+        <View style={{ width: '100%', gap: 12, marginTop: 20 }}>
+          {CARDS.map(card => (
+            <View
+              key={card.title}
+              style={{
+                backgroundColor: card.bg,
+                borderWidth: 1.5, borderColor: card.border,
+                borderRadius: 16, padding: 20,
+                flexDirection: 'row', alignItems: 'center', gap: 16,
+              }}
+            >
+              <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                <Text style={{ fontSize: 17, fontFamily: F.black, color: card.border, marginBottom: 4, textAlign: 'right' }}>
+                  {card.title}
+                </Text>
+                <Text style={{ fontSize: 14, fontFamily: F.regular, color: '#c0c0c0', lineHeight: 21, textAlign: 'right' }}>
+                  {card.text}
+                </Text>
+              </View>
+              <Text style={{ fontSize: 40 }}>{card.emoji}</Text>
             </View>
           ))}
         </View>
